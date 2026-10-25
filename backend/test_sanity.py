@@ -60,6 +60,8 @@ def run_tests():
 
     # 1. Test Health / Cloud Audit status
     try:
+        req_reset = urllib.request.Request(f"{BASE_URL}/api/reset-test-ledger", data=b"{}", method="POST")
+        urllib.request.urlopen(req_reset, timeout=5)
         req = urllib.request.Request(f"{BASE_URL}/api/aws-status")
         with urllib.request.urlopen(req, timeout=5) as resp:
             aws_info = json.loads(resp.read().decode())
@@ -160,12 +162,34 @@ def run_tests():
         if os.path.exists(face_path):
             os.remove(face_path)
 
-    # 5. Check MCP Tools Listing
+    # 5. Test Case 7: OpenCV pHash Sybil Attack Duplicate Claim Detection
+    if os.path.exists(tampered_path):
+        res_sybil = upload_claim(tampered_path, "Quick-Commerce Produce Claim")
+        verify_forensic_contract(res_sybil, "Test Case 7 Sybil Duplicate")
+        print("\n--- Test Case 7: Sybil Attack (Duplicate Claim Photo Reuse) ---")
+        print(f"  Verdict:            {res_sybil['verdict']}")
+        print(f"  Tamper Probability: {res_sybil['tamper_probability']}%")
+        print(f"  Autonomous Action:  {res_sybil['action_taken']}")
+        assert res_sybil["verdict"] == "REJECT_DUPLICATE_CLAIM_FRAUD", (
+            f"Expected REJECT_DUPLICATE_CLAIM_FRAUD, got: {res_sybil['verdict']}"
+        )
+        print("  Status:             PASSED (Autonomous Detection of Reused Photo via pHash)")
+
+    # 6. Check MCP Tools Listing & JSON-RPC
     req_mcp = urllib.request.Request(f"{BASE_URL}/mcp/tools")
     with urllib.request.urlopen(req_mcp, timeout=5) as resp:
         mcp_data = json.loads(resp.read().decode())
         tools = mcp_data.get("tools", [])
         print(f"\n[OK] Model Context Protocol (MCP) Server: {len(tools)} OpenCV 5 tools registered.")
+        assert len(tools) >= 6, f"Expected >= 6 MCP tools, got {len(tools)}"
+
+    # 7. Check COOL Benchmark Waterfall
+    req_bench = urllib.request.Request(f"{BASE_URL}/api/benchmark-cool?iterations=15")
+    with urllib.request.urlopen(req_bench, timeout=5) as resp:
+        bench_data = json.loads(resp.read().decode())
+        waterfall = bench_data.get("tool_waterfall", [])
+        print(f"[OK] ARM64 COOL Performance Waterfall: {len(waterfall)} OpenCV 5 primitives profiled.")
+        assert len(waterfall) >= 5, "Missing tool waterfall in benchmark"
 
     print("\n" + "=" * 60)
     print("  ALL VERISIGHT MCP FORENSIC PIPELINE TESTS PASSED!")

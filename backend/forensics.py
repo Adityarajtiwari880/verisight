@@ -469,3 +469,122 @@ def tool_semantic_scene_triage(img_bgr: np.ndarray, claim_type: str = "") -> Dic
         "rejection_reason": rejection_reason,
         "latency_ms": latency_ms
     }
+
+def tool_perceptual_hash(img: np.ndarray) -> Dict[str, Any]:
+    """
+    Step 0-C: OpenCV 2D-DCT Perceptual Image Hashing (pHash).
+    Calculates a 64-bit frequency-invariant perceptual fingerprint resistant to
+    JPEG recompression, mild rotation, and minor color shifts.
+    Used for Sybil attack & duplicate refund fraud ring detection.
+    """
+    t0 = time.perf_counter()
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if len(img.shape) == 3 else img.copy()
+    resized = cv2.resize(gray, (32, 32), interpolation=cv2.INTER_AREA)
+    
+    # 2D Discrete Cosine Transform (DCT)
+    dct = cv2.dct(np.float32(resized))
+    
+    # Extract 8x8 low-frequency matrix (top-left 8x8)
+    dct_low = dct[:8, :8]
+    
+    # Compute median excluding DC component (0,0)
+    med = np.median(dct_low.flatten()[1:])
+    
+    # 64-bit boolean bitmask
+    bitmask = (dct_low > med).flatten()
+    
+    # Convert bitmask to 16-character hex string
+    hex_str = ""
+    for i in range(0, 64, 4):
+        nibble = bitmask[i:i+4]
+        val = sum([b << (3 - j) for j, b in enumerate(nibble)])
+        hex_str += hex(val)[2:]
+        
+    latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+    return {
+        "phash_hex": hex_str,
+        "phash_bits": [int(b) for b in bitmask],
+        "latency_ms": latency_ms
+    }
+
+def compute_hamming_distance(hash1_hex: str, hash2_hex: str) -> int:
+    """Computes bitwise Hamming distance between two 16-char hex pHash strings."""
+    try:
+        val1 = int(hash1_hex, 16)
+        val2 = int(hash2_hex, 16)
+        return bin(val1 ^ val2).count('1')
+    except Exception:
+        return 64
+
+def tool_micro_roi_seam_inspection(img: np.ndarray, roi: List[int]) -> Dict[str, Any]:
+    """
+    Step 7-B: Autonomous Micro-ROI Re-Inspection Loop (Adaptive Super-Resolution).
+    Crops suspect ROI, applies 2x super-resolution bicubic interpolation, and evaluates
+    boundary seam Laplacian variance against interior texture to detect AI inpainting feathering.
+    """
+    t0 = time.perf_counter()
+    h, w = img.shape[:2]
+    rx, ry, rw, rh = roi
+    
+    # Guard against invalid or full-frame ROI
+    if rw <= 10 or rh <= 10 or (rw >= w - 10 and rh >= h - 10):
+        latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+        return {
+            "reinspected": False,
+            "seam_discontinuity_index": 1.0,
+            "is_feathered_boundary": False,
+            "micro_roi_visual": None,
+            "latency_ms": latency_ms
+        }
+        
+    # Crop ROI with 5% safety margin
+    pad_x = max(4, int(rw * 0.08))
+    pad_y = max(4, int(rh * 0.08))
+    x0 = max(0, rx - pad_x)
+    y0 = max(0, ry - pad_y)
+    x1 = min(w, rx + rw + pad_x)
+    y1 = min(h, ry + rh + pad_y)
+    
+    crop = img[y0:y1, x0:x1]
+    if crop.size == 0:
+        return {"reinspected": False, "seam_discontinuity_index": 1.0, "is_feathered_boundary": False, "micro_roi_visual": None, "latency_ms": 0.0}
+        
+    # Adaptive 2x Super-Resolution via Lanczos-4 / Bicubic
+    crop_sr = cv2.resize(crop, (crop.shape[1] * 2, crop.shape[0] * 2), interpolation=cv2.INTER_LANCZOS4)
+    gray_sr = cv2.cvtColor(crop_sr, cv2.COLOR_BGR2GRAY)
+    
+    # High-pass Laplacian edge filter for micro-seam detection
+    lap = cv2.Laplacian(gray_sr, cv2.CV_64F, ksize=3)
+    lap_mag = np.uint8(np.clip(np.abs(lap), 0, 255))
+    
+    # Perimeter mask (boundary seam) vs Interior mask
+    sr_h, sr_w = gray_sr.shape
+    border_mask = np.zeros((sr_h, sr_w), dtype=np.uint8)
+    margin = 8
+    border_mask[:margin, :] = 255
+    border_mask[-margin:, :] = 255
+    border_mask[:, :margin] = 255
+    border_mask[:, -margin:] = 255
+    
+    interior_mask = cv2.bitwise_not(border_mask)
+    
+    seam_std = float(np.std(lap_mag[border_mask > 0])) if np.sum(border_mask) > 0 else 1.0
+    interior_std = float(np.std(lap_mag[interior_mask > 0])) if np.sum(interior_mask) > 0 else 1.0
+    
+    ratio = round(seam_std / max(interior_std, 0.01), 2)
+    is_feathered = ratio > 1.85 or ratio < 0.35
+    
+    # Overlay glowing border and heatmap on super-resolved crop
+    colored_lap = cv2.applyColorMap(lap_mag, cv2.COLORMAP_MAGMA)
+    blended = cv2.addWeighted(crop_sr, 0.65, colored_lap, 0.35, 0)
+    cv2.rectangle(blended, (2, 2), (sr_w - 3, sr_h - 3), (52, 211, 153), 2)
+    cv2.putText(blended, f"MICRO-SEAM RATIO: {ratio}x", (10, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 200), 1, cv2.LINE_AA)
+    
+    latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+    return {
+        "reinspected": True,
+        "seam_discontinuity_index": ratio,
+        "is_feathered_boundary": is_feathered,
+        "micro_roi_visual": encode_img_base64(blended),
+        "latency_ms": latency_ms
+    }

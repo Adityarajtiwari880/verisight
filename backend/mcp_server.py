@@ -74,6 +74,31 @@ MCP_TOOLS_MANIFEST = [
         }
     },
     {
+        "name": "verisight_perceptual_hash",
+        "description": "Computes a 64-bit 2D-DCT frequency perceptual hash (pHash) and scans DynamoDB for duplicate photo reuse and Sybil refund rings.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "max_hamming_distance": {"type": "integer", "description": "Maximum bit divergence threshold (default: 5)"}
+            }
+        }
+    },
+    {
+        "name": "verisight_micro_roi_seam_check",
+        "description": "Autonomous micro-investigation loop. Upscales suspect ROI 2x using Lanczos interpolation and measures boundary seam Laplacian discontinuity.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "roi_bounding_box": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "[x, y, width, height] suspect coordinates"
+                }
+            },
+            "required": ["roi_bounding_box"]
+        }
+    },
+    {
         "name": "verisight_cloud_ledger_audit",
         "description": "Queries the immutable AWS DynamoDB tamper ledger and retrieves S3 forensic evidence bundles.",
         "inputSchema": {

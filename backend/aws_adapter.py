@@ -135,6 +135,7 @@ class AWSCloudAdapter:
             "action_taken": record.get("action_taken", ""),
             "s3_evidence_uri": record.get("s3_uri", ""),
             "sha256_hash": record.get("sha256_hash", ""),
+            "phash_hex": record.get("phash_hex", ""),
             "hardware_platform": record.get("hardware_platform", "AWS_GRAVITON_ARM64")
         }
         
@@ -175,6 +176,51 @@ class AWSCloudAdapter:
             "claim_id": record_id,
             "latency_ms": latency
         }
+
+    def find_duplicate_claim_by_phash(self, phash_hex: str, max_hamming_distance: int = 5, current_claim_id: str = "") -> Optional[Dict[str, Any]]:
+        """
+        Scans DynamoDB audit ledger for previous claims matching this perceptual hash.
+        Detects Sybil ring attacks where the same photo was reused across accounts.
+        """
+        if not phash_hex:
+            return None
+            
+        history = self.get_audit_history(limit=50)
+        try:
+            val1 = int(phash_hex, 16)
+        except Exception:
+            return None
+            
+        for rec in history:
+            rec_id = rec.get("claim_id", "")
+            if rec_id == current_claim_id:
+                continue
+            rec_phash = rec.get("phash_hex", "")
+            if not rec_phash:
+                continue
+            try:
+                val2 = int(rec_phash, 16)
+                dist = bin(val1 ^ val2).count('1')
+                if dist <= max_hamming_distance:
+                    return {
+                        "matched_claim_id": rec_id,
+                        "hamming_distance": dist,
+                        "similarity_pct": round((64 - dist) / 64 * 100, 1),
+                        "original_verdict": rec.get("verdict"),
+                        "original_timestamp": rec.get("timestamp")
+                    }
+            except Exception:
+                continue
+        return None
+
+    def clear_test_ledger(self):
+        """Resets the local test ledger for reproducible automated sanity suites."""
+        if not self.is_live_aws and os.path.exists(DYNAMODB_LEDGER_FILE):
+            try:
+                with open(DYNAMODB_LEDGER_FILE, "w", encoding="utf-8") as f:
+                    json.dump([], f)
+            except Exception:
+                pass
 
     def get_audit_history(self, limit: int = 15) -> List[Dict[str, Any]]:
         """Retrieves recent audit ledger entries."""

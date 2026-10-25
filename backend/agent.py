@@ -15,12 +15,14 @@ from datetime import datetime, timezone
 from forensics import (
     tool_extract_metadata_provenance,
     tool_semantic_scene_triage,
+    tool_perceptual_hash,
     tool_active_clahe_remediation,
     tool_global_ela_scan,
     tool_sweep_jpeg_ghosts,
     tool_roi_fourier_probe,
     tool_gradient_chrominance_check,
     tool_sensor_noise_probe,
+    tool_micro_roi_seam_inspection,
     tool_color_space_decomposition,
     encode_img_base64
 )
@@ -60,6 +62,13 @@ class ForensicAgent:
             
         provenance = tool_extract_metadata_provenance(raw_bytes)
         agent_trace: List[Dict[str, Any]] = []
+
+        # -------------------------------------------------------------
+        # STEP 0-A: OPENCV 2D-DCT PERCEPTUAL IMAGE HASHING (pHash)
+        # -------------------------------------------------------------
+        phash_data = tool_perceptual_hash(img)
+        phash_hex = phash_data["phash_hex"]
+        duplicate_match = aws_adapter.find_duplicate_claim_by_phash(phash_hex, max_hamming_distance=5, current_claim_id=claim_id)
 
         # -------------------------------------------------------------
         # STEP 0-B: AUTONOMOUS SEMANTIC DOMAIN & SUBJECT TRIAGE
@@ -119,6 +128,7 @@ class ForensicAgent:
                 "face_detected": scene_triage["face_detected"],
                 "text_lines_count": scene_triage["text_lines_count"],
                 "timestamp": datetime.now(timezone.utc).isoformat(),
+                "phash_hex": phash_hex,
                 "agent_trace": agent_trace
             }
             s3_res = aws_adapter.store_evidence_bundle(claim_id, evidence_bundle)
@@ -129,6 +139,7 @@ class ForensicAgent:
                 "action_taken": rejection_reason,
                 "s3_uri": s3_res.get("s3_uri", ""),
                 "sha256_hash": s3_res.get("sha256_checksum", ""),
+                "phash_hex": phash_hex,
                 "hardware_platform": platform.machine()
             })
             cloud_audit = {
@@ -159,6 +170,9 @@ class ForensicAgent:
                     "prnu_noise_divergence_pct": 0.0,
                     "chrominance_diff": 0.0,
                     "chrominance_discrepancy_pct": 0.0,
+                    "seam_discontinuity_index": 1.0,
+                    "phash_hex": phash_hex,
+                    "sybil_duplicate": duplicate_match,
                     "mean_luminance": 128.0,
                     "clahe_applied": False,
                     "execution_time_ms": elapsed_ms,
@@ -269,22 +283,40 @@ class ForensicAgent:
         })
         
         # -------------------------------------------------------------
+        # STEP 3-B: AUTONOMOUS MICRO-ROI RE-INSPECTION (Adaptive Super-Resolution)
+        # -------------------------------------------------------------
+        seam_meta = tool_micro_roi_seam_inspection(working_img, roi)
+        seam_ratio = seam_meta.get("seam_discontinuity_index", 1.0)
+        is_feathered = seam_meta.get("is_feathered_boundary", False)
+        
+        if seam_meta.get("reinspected"):
+            agent_trace.append({
+                "step": 4,
+                "phase": "AUTONOMOUS RE-INSPECTION (Adaptive 2x Lanczos Super-Resolution)",
+                "tool": "tool_micro_roi_seam_inspection (Boundary Seam Laplacian Variance)",
+                "observation": f"Cropped suspect ROI {roi}, upscaled 2x via Lanczos. Perimeter-to-interior seam variance ratio: {seam_ratio}x. Inpainting seam discontinuity: {is_feathered}.",
+                "decision": "Discontinuous boundary confirmed synthetic inpainting blending seam; elevated tamper confidence." if is_feathered else "Boundary seam continuous with organic background gradient.",
+                "hypothesis_verdict": "CONFIRMED (Feathered Seam)" if is_feathered else "REFUTED (Continuous)"
+            })
+
+        # -------------------------------------------------------------
         # STEP 4: CALIBRATED MULTI-SPECTRAL RISK FUSION
         # -------------------------------------------------------------
         clusters_detected = ela_meta.get("clusters_detected", 0)
         has_isolated_cluster = (clusters_detected > 0 and ela_score > 28.0)
 
-        # Multi-modal calibrated risk combining all 5 forensic modalities:
+        # Multi-modal calibrated risk combining all forensic modalities:
         ela_contrib = max(0.0, (ela_score - 22.0) * 0.70)
         chrom_contrib = max(0.0, (chrom_diff - 30.0) * 0.45) if has_isolated_cluster else 0.0
         noise_contrib = max(0.0, (noise_divergence - 80.0) * 0.35) if has_isolated_cluster else 0.0
         ghost_contrib = max(0.0, (ghost_discrepancy - 1.8) * 4.0) if has_isolated_cluster else 0.0
+        seam_contrib = 18.0 if (is_feathered and has_isolated_cluster) else 0.0
         software_contrib = 35.0 if provenance.get("is_edited_software_flag") else 0.0
         
         # Sensitivity modifier
         sens_multiplier = 1.15 if sensitivity == "aggressive" else (0.85 if sensitivity == "conservative" else 1.0)
         
-        raw_risk = (8.5 + ela_contrib + chrom_contrib + noise_contrib + ghost_contrib + software_contrib) * sens_multiplier
+        raw_risk = (8.5 + ela_contrib + chrom_contrib + noise_contrib + ghost_contrib + seam_contrib + software_contrib) * sens_multiplier
         
         if preset_hint == "whatsapp_dark":
             tamper_probability = 61.5
@@ -297,7 +329,14 @@ class ForensicAgent:
         reject_threshold = 68.0 if sensitivity == "aggressive" else (74.0 if sensitivity == "conservative" else 70.0)
         review_threshold = 42.0 if sensitivity == "aggressive" else (48.0 if sensitivity == "conservative" else 45.0)
         
-        if tamper_probability >= reject_threshold:
+        is_calibration_claim = "calibration" in claim_type.lower() or "direct camera" in claim_type.lower() or "sensor test" in claim_type.lower()
+        
+        if duplicate_match and not is_calibration_claim:
+            tamper_probability = max(tamper_probability, 92.5)
+            verdict = "REJECT_DUPLICATE_CLAIM_FRAUD"
+            action_taken = f"DUPLICATE PHOTO REUSE AUTO-BLOCKED (92.5% Risk). Matches Claim #{duplicate_match['matched_claim_id']} ({duplicate_match['similarity_pct']}% pHash similarity). Frozen payout & logged Sybil pattern."
+            box_color = (0, 0, 255)
+        elif tamper_probability >= reject_threshold:
             verdict = "REJECT_SYNTHETIC_TAMPER"
             action_taken = f"Auto-blocked refund ({tamper_probability}% Risk). Tampering detected in ROI {roi}; locked forensic bundle to AWS S3 & alerted Supervisor."
             box_color = (0, 0, 255)
@@ -338,6 +377,8 @@ class ForensicAgent:
                 "chrominance_discrepancy_pct": chrom_diff,
                 "ghost_discrepancy": ghost_discrepancy,
                 "prnu_noise_divergence_pct": noise_divergence,
+                "seam_discontinuity_index": seam_ratio,
+                "phash_hex": phash_hex,
                 "latency_ms": total_latency_ms,
                 "arch": platform.machine(),
                 "opencv_version": cv2.__version__,
@@ -354,6 +395,7 @@ class ForensicAgent:
             "action_taken": action_taken,
             "s3_uri": s3_res.get("s3_uri", ""),
             "sha256_hash": s3_res.get("sha256_checksum", ""),
+            "phash_hex": phash_hex,
             "hardware_platform": platform.machine()
         })
         
@@ -372,6 +414,9 @@ class ForensicAgent:
                 "ghost_discrepancy": ghost_discrepancy,
                 "prnu_noise_divergence_pct": noise_divergence,
                 "harmonic_ratio": harmonic_ratio,
+                "seam_discontinuity_index": seam_ratio,
+                "phash_hex": phash_hex,
+                "sybil_duplicate": duplicate_match,
                 "latency_ms": total_latency_ms,
                 "arch": platform.machine(),
                 "opencv_version": cv2.__version__,
@@ -389,7 +434,8 @@ class ForensicAgent:
                 "fft_spectrum": encode_img_base64(fft_map),
                 "gradient_map": encode_img_base64(grad_map),
                 "ghost_heatmap": encode_img_base64(ghost_map),
-                "noise_residual": encode_img_base64(noise_map)
+                "noise_residual": encode_img_base64(noise_map),
+                "micro_roi_visual": seam_meta.get("micro_roi_visual") or encode_img_base64(annotated)
             }
         }
 
