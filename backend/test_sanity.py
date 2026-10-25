@@ -36,6 +36,22 @@ def upload_claim(filepath: str, claim_type: str = "Automated Sanity Test"):
     with urllib.request.urlopen(req, timeout=15) as resp:
         return json.loads(resp.read().decode())
 
+def verify_forensic_contract(res, label=""):
+    assert "visuals" in res, f"[{label}] Missing 'visuals' object"
+    assert "gradient_map" in res["visuals"] and res["visuals"]["gradient_map"].startswith("data:image"), (
+        f"[{label}] Missing or invalid 'gradient_map' in visuals"
+    )
+    assert "ela_heatmap" in res["visuals"] and res["visuals"]["ela_heatmap"].startswith("data:image"), (
+        f"[{label}] Missing or invalid 'ela_heatmap' in visuals"
+    )
+    assert "metrics" in res, f"[{label}] Missing 'metrics' object"
+    assert "chrominance_discrepancy_pct" in res["metrics"], (
+        f"[{label}] Missing 'chrominance_discrepancy_pct' in metrics"
+    )
+    assert "agent_trace" in res and len(res["agent_trace"]) > 0, (
+        f"[{label}] Missing 'agent_trace' reasoning steps"
+    )
+
 def run_tests():
     print("=" * 60)
     print("  VeriSight MCP Forensic Pipeline - Automated Sanity Verification")
@@ -57,6 +73,7 @@ def run_tests():
     genuine_path = os.path.join(script_dir, "1_genuine_claim.jpg")
     if os.path.exists(genuine_path):
         res_g = upload_claim(genuine_path, "Commercial Delivery Package Claim")
+        verify_forensic_contract(res_g, "Test Case 1 Genuine")
         print("\n--- Test Case 1: Genuine Unedited Image ---")
         print(f"  Verdict:            {res_g['verdict']}")
         print(f"  Tamper Probability: {res_g['tamper_probability']}%")
@@ -70,6 +87,7 @@ def run_tests():
     tampered_path = os.path.join(script_dir, "sample_real_strawberries_inpainted.jpg")
     if os.path.exists(tampered_path):
         res_t = upload_claim(tampered_path, "Synthetic Mold Refund Fraud")
+        verify_forensic_contract(res_t, "Test Case 2 Inpainted")
         print("\n--- Test Case 2: Real-World Inpainted Image ---")
         print(f"  Verdict:            {res_t['verdict']}")
         print(f"  Tamper Probability: {res_t['tamper_probability']}%")
@@ -91,6 +109,7 @@ def run_tests():
 
     try:
         res_mismatch = upload_claim(face_path, "Zepto Tax Invoice Claim")
+        verify_forensic_contract(res_mismatch, "Test Case 3 Face in Invoice")
         print("\n--- Test Case 3: Semantic Mismatch (Face in Invoice Claim) ---")
         print(f"  Verdict:            {res_mismatch['verdict']}")
         print(f"  Autonomous Action:  {res_mismatch['action_taken']}")
@@ -101,6 +120,7 @@ def run_tests():
 
         # Verify that an authentic camera capture IS APPROVED under Direct Camera Test
         res_cam = upload_claim(genuine_path, "Direct Camera Sensor Test")
+        verify_forensic_contract(res_cam, "Test Case 4 Camera Calib")
         print("\n--- Test Case 4: Direct Camera Integrity Calibration ---")
         print(f"  Verdict:            {res_cam['verdict']}")
         print(f"  Autonomous Action:  {res_cam['action_taken']}")
@@ -115,6 +135,7 @@ def run_tests():
         cv2.imwrite(jeans_path, test_jeans)
         try:
             res_jeans_fruit = upload_claim(jeans_path, "Real-Life Quick-Commerce Produce Claim")
+            verify_forensic_contract(res_jeans_fruit, "Test Case 5 Jeans Produce")
             print("\n--- Test Case 5: Non-Produce Object (Jeans/Purse) in Produce Claim ---")
             print(f"  Verdict:            {res_jeans_fruit['verdict']}")
             print(f"  Autonomous Action:  {res_jeans_fruit['action_taken']}")
@@ -124,6 +145,7 @@ def run_tests():
             print("  Status:             PASSED (Autonomous Refusal of Purse/Jeans in Produce Claim)")
 
             res_jeans_invoice = upload_claim(jeans_path, "Real-Life Quick-Commerce Tax Invoice Claim")
+            verify_forensic_contract(res_jeans_invoice, "Test Case 6 Jeans Invoice")
             print("\n--- Test Case 6: Non-Document Object (Jeans/Purse) in Invoice Claim ---")
             print(f"  Verdict:            {res_jeans_invoice['verdict']}")
             print(f"  Autonomous Action:  {res_jeans_invoice['action_taken']}")

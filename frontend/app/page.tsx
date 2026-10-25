@@ -107,6 +107,7 @@ interface ForensicResult {
     ela_heatmap: string;
     fft_spectrum: string;
     gradient_map: string;
+    chrominance_map?: string;
     ghost_heatmap?: string;
     noise_residual?: string;
   };
@@ -431,7 +432,7 @@ export default function VeriSightDashboard() {
       case "fft":
         return data.visuals.fft_spectrum;
       case "gradient":
-        return data.visuals.gradient_map;
+        return data.visuals.gradient_map || data.visuals.chrominance_map || data.visuals.ela_heatmap;
       case "ghost":
         return data.visuals.ghost_heatmap || data.visuals.ela_heatmap;
       case "noise":
@@ -1662,8 +1663,14 @@ export default function VeriSightDashboard() {
                   }`}
                 >
                   <p className="text-[10px] font-bold text-slate-200 truncate mb-1">3. Chrominance</p>
-                  <img src={data.visuals.gradient_map} alt="Sobel" className="rounded w-full h-20 object-cover" />
-                  <span className="text-[10px] text-slate-400 mt-1 block font-mono">Diff: {data.metrics?.chrominance_discrepancy_pct}%</span>
+                  <img
+                    src={data.visuals.gradient_map || data.visuals.chrominance_map || data.visuals.ela_heatmap}
+                    alt="Sobel"
+                    className="rounded w-full h-20 object-cover"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-1 block font-mono">
+                    Diff: {data.metrics?.chrominance_discrepancy_pct ?? (data.metrics as any)?.chrominance_diff ?? 0.0}%
+                  </span>
                 </div>
 
                 <div
