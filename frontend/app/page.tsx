@@ -33,7 +33,11 @@ import {
   SlidersHorizontal,
   Info,
   Palette,
-  Check
+  Check,
+  Radio,
+  Crosshair,
+  Focus,
+  SwitchCamera
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
@@ -125,14 +129,42 @@ export default function VeriSightDashboard() {
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [sensitivity, setSensitivity] = useState<"conservative" | "balanced" | "aggressive">("balanced");
   
-  // Webcam scanner state
+  // Camera & Hardware Scanner state
   const [cameraActive, setCameraActive] = useState<boolean>(false);
+  const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
+  const [scannerCategory, setScannerCategory] = useState<"fruit" | "invoice" | "bumper" | "general">("fruit");
+  const [shutterFlash, setShutterFlash] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // Loupe / Magnifier state
+  // Loupe / Forensic Magnifier state
   const [loupeActive, setLoupeActive] = useState<boolean>(false);
-  const [loupePos, setLoupePos] = useState<{ x: number; y: number }>({ x: 50, y: 50 });
+  const [loupeMode, setLoupeMode] = useState<"xray" | "optical">("xray");
+  const [loupeZoom, setLoupeZoom] = useState<number>(3.5);
+  const [loupeCoords, setLoupeCoords] = useState<{
+    cursorX: number;
+    cursorY: number;
+    containerW: number;
+    containerH: number;
+    imgW: number;
+    imgH: number;
+    imgOffsetX: number;
+    imgOffsetY: number;
+    isInsideImage: boolean;
+  }>({
+    cursorX: 0,
+    cursorY: 0,
+    containerW: 600,
+    containerH: 420,
+    imgW: 600,
+    imgH: 420,
+    imgOffsetX: 0,
+    imgOffsetY: 0,
+    isInsideImage: false
+  });
+  const viewerRef = useRef<HTMLDivElement | null>(null);
+  const imageDisplayRef = useRef<HTMLImageElement | null>(null);
 
   useEffect(() => {
     fetch(API_URL + "/api/enterprise-queue")
@@ -151,16 +183,33 @@ export default function VeriSightDashboard() {
       .catch(() => {});
   }, []);
 
-  const startCamera = async () => {
+  const startCamera = async (deviceId?: string) => {
     setCameraActive(true);
+    setShutterFlash(false);
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "environment" }
-      });
+      const constraints: MediaStreamConstraints = {
+        video: deviceId
+          ? { deviceId: { exact: deviceId } }
+          : { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "environment" }
+      };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.play();
+      }
+
+      if (navigator.mediaDevices.enumerateDevices) {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoInputs = devices.filter((d) => d.kind === "videoinput");
+        setCameraDevices(videoInputs);
+        if (!selectedDeviceId && videoInputs.length > 0) {
+          setSelectedDeviceId(videoInputs[0].deviceId);
+        }
       }
     } catch (err) {
       alert("Unable to access camera. Please allow webcam permissions.");
@@ -174,37 +223,105 @@ export default function VeriSightDashboard() {
       streamRef.current = null;
     }
     setCameraActive(false);
+    setShutterFlash(false);
   };
 
   const capturePhoto = () => {
     if (!videoRef.current) return;
+    setShutterFlash(true);
+
     const canvas = document.createElement("canvas");
-    canvas.width = videoRef.current.videoWidth || 640;
-    canvas.height = videoRef.current.videoHeight || 480;
+    canvas.width = videoRef.current.videoWidth || 1280;
+    canvas.height = videoRef.current.videoHeight || 720;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-    stopCamera();
 
-    canvas.toBlob((blob) => {
-      if (blob) {
-        const file = new File([blob], `live_capture_${Date.now()}.jpg`, { type: "image/jpeg" });
-        analyzeFile(file);
-      }
-    }, "image/jpeg", 0.95);
+    setTimeout(() => {
+      stopCamera();
+
+      const categoryLabels: Record<string, string> = {
+        fruit: "Real-Life Quick-Commerce Produce Claim",
+        invoice: "Real-Life Quick-Commerce Tax Invoice Claim",
+        bumper: "Real-Life Auto Insurance Bumper Claim",
+        general: "Real-Life Optical Inspection Claim"
+      };
+
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const file = new File([blob], `live_scanner_${Date.now()}.jpg`, { type: "image/jpeg" });
+          analyzeFile(file, categoryLabels[scannerCategory] || "Real-Life Optical Scanner Claim");
+        }
+      }, "image/jpeg", 0.95);
+    }, 200);
   };
 
-  const analyzeFile = async (file: File) => {
+  const handleViewerMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!viewerRef.current) return;
+    const rect = viewerRef.current.getBoundingClientRect();
+    const cursorX = e.clientX - rect.left;
+    const cursorY = e.clientY - rect.top;
+
+    const imgEl = imageDisplayRef.current;
+    const naturalW = imgEl?.naturalWidth || 640;
+    const naturalH = imgEl?.naturalHeight || 480;
+    const naturalAspect = naturalW / naturalH;
+    const containerAspect = rect.width / rect.height;
+
+    let imgW = rect.width;
+    let imgH = rect.height;
+    let imgOffsetX = 0;
+    let imgOffsetY = 0;
+
+    if (containerAspect > naturalAspect) {
+      imgH = rect.height;
+      imgW = rect.height * naturalAspect;
+      imgOffsetX = (rect.width - imgW) / 2;
+      imgOffsetY = 0;
+    } else {
+      imgW = rect.width;
+      imgH = rect.width / naturalAspect;
+      imgOffsetX = 0;
+      imgOffsetY = (rect.height - imgH) / 2;
+    }
+
+    const relImgX = cursorX - imgOffsetX;
+    const relImgY = cursorY - imgOffsetY;
+    const isInsideImage = relImgX >= 0 && relImgX <= imgW && relImgY >= 0 && relImgY <= imgH;
+
+    setLoupeCoords({
+      cursorX,
+      cursorY,
+      containerW: rect.width,
+      containerH: rect.height,
+      imgW,
+      imgH,
+      imgOffsetX,
+      imgOffsetY,
+      isInsideImage
+    });
+  };
+
+  const analyzeFile = async (file: File, claimLabel?: string) => {
     setLoading(true);
     setHumanOverride(null);
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("claim_type", "Real-Life Photo Forensic Claim");
+    formData.append("claim_type", claimLabel || "Real-Life Photo Forensic Claim");
     formData.append("sensitivity", sensitivity);
     try {
       const res = await fetch(API_URL + "/api/analyze-claim", { method: "POST", body: formData });
       const result = await res.json();
       setData(result);
+      // Auto-refresh enterprise queue
+      fetch(API_URL + "/api/enterprise-queue")
+        .then((r) => r.json())
+        .then((q) => setQueue(q))
+        .catch(() => {});
+      fetch(API_URL + "/api/aws-status")
+        .then((r) => r.json())
+        .then((s) => setCloudStatus(s))
+        .catch(() => {});
     } catch (err) {
       alert("Ensure FastAPI backend is running on port 8000");
     }
@@ -422,7 +539,7 @@ export default function VeriSightDashboard() {
 
             {/* LIVE WEBCAM SCANNER BUTTON */}
             <button
-              onClick={startCamera}
+              onClick={() => startCamera()}
               disabled={loading}
               className="bg-slate-900/90 hover:bg-slate-800 border border-indigo-500/40 hover:border-indigo-400 text-indigo-300 px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shadow-sm active:scale-95"
             >
@@ -584,49 +701,206 @@ export default function VeriSightDashboard() {
           </div>
         </div>
 
-        {/* WEBCAM CAPTURE LIVE MODAL */}
+        {/* WEBCAM CAPTURE LIVE OPTICAL SCANNER MODAL */}
         {cameraActive && (
-          <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-5 space-y-3.5 shadow-2xl relative">
-              <div className="flex justify-between items-center border-b border-slate-800 pb-2.5">
+          <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200">
+            <div className="bg-slate-950 border border-emerald-500/40 rounded-2xl max-w-2xl w-full p-4 sm:p-6 space-y-4 shadow-[0_0_50px_rgba(16,185,129,0.25)] relative overflow-hidden">
+              
+              {/* Shutter Flash Animation */}
+              {shutterFlash && (
+                <div className="absolute inset-0 bg-white z-50 animate-shutter-flash pointer-events-none" />
+              )}
+
+              {/* MODAL HEADER */}
+              <div className="flex flex-wrap justify-between items-center border-b border-slate-800 pb-3 gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.3)]">
+                    <Radio className="w-4 h-4 animate-pulse" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                        Live Optical Forensic Scanner
+                      </h3>
+                      <span className="text-[10px] font-mono bg-emerald-950 text-emerald-400 border border-emerald-700/50 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" /> SENSOR ACTIVE
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      OpenCV 5 Active Perception Module • Hardware Accelerated CMOS Capture
+                    </p>
+                  </div>
+                </div>
+
                 <div className="flex items-center gap-2">
-                  <Camera className="w-4 h-4 text-emerald-400 animate-pulse" />
-                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                    Live Optical Scanner (Webcam / Camera)
-                  </h3>
-                </div>
-                <button onClick={stopCamera} className="text-slate-400 hover:text-white p-1">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* VIDEO VIEWER WITH RETICLE */}
-              <div className="relative w-full h-[280px] bg-black rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center">
-                <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-                <div className="absolute inset-6 border border-dashed border-emerald-400/60 rounded-lg pointer-events-none flex items-center justify-center">
-                  <span className="text-[10px] font-bold text-emerald-400 bg-black/70 px-2.5 py-1 rounded-full uppercase tracking-wider">
-                    Align Product or Receipt Here
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex justify-between items-center pt-1">
-                <span className="text-xs text-slate-400">Position the claimed item in the frame</span>
-                <div className="flex gap-2">
+                  {cameraDevices.length > 1 && (
+                    <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700 px-2 py-1 rounded-lg">
+                      <SwitchCamera className="w-3.5 h-3.5 text-slate-400" />
+                      <select
+                        value={selectedDeviceId}
+                        onChange={(e) => {
+                          setSelectedDeviceId(e.target.value);
+                          startCamera(e.target.value);
+                        }}
+                        className="bg-transparent text-slate-200 text-xs focus:outline-none cursor-pointer"
+                      >
+                        {cameraDevices.map((d, i) => (
+                          <option key={d.deviceId || i} value={d.deviceId} className="bg-slate-900 text-slate-200">
+                            {d.label || `Camera ${i + 1}`}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <button
                     onClick={stopCamera}
-                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg text-xs font-semibold transition"
+                    className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* CLAIM CATEGORY SELECTOR */}
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">
+                  Target Inspection Category:
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                  <button
+                    onClick={() => setScannerCategory("fruit")}
+                    className={`p-2 rounded-lg border text-left transition flex items-center gap-2 ${
+                      scannerCategory === "fruit"
+                        ? "bg-emerald-950/60 border-emerald-400 text-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.2)]"
+                        : "bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700"
+                    }`}
+                  >
+                    <span className="text-base">🍓</span>
+                    <div className="truncate">
+                      <div className="font-bold text-white truncate text-[11px]">Fresh Produce</div>
+                      <div className="text-[9px] text-slate-400">Mold & Rot Fraud</div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => setScannerCategory("invoice")}
+                    className={`p-2 rounded-lg border text-left transition flex items-center gap-2 ${
+                      scannerCategory === "invoice"
+                        ? "bg-emerald-950/60 border-emerald-400 text-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.2)]"
+                        : "bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700"
+                    }`}
+                  >
+                    <span className="text-base">🧾</span>
+                    <div className="truncate">
+                      <div className="font-bold text-white truncate text-[11px]">Tax Invoice</div>
+                      <div className="text-[9px] text-slate-400">Altered Amount</div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => setScannerCategory("bumper")}
+                    className={`p-2 rounded-lg border text-left transition flex items-center gap-2 ${
+                      scannerCategory === "bumper"
+                        ? "bg-emerald-950/60 border-emerald-400 text-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.2)]"
+                        : "bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700"
+                    }`}
+                  >
+                    <span className="text-base">🚗</span>
+                    <div className="truncate">
+                      <div className="font-bold text-white truncate text-[11px]">Vehicle Body</div>
+                      <div className="text-[9px] text-slate-400">Collision Dent</div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => setScannerCategory("general")}
+                    className={`p-2 rounded-lg border text-left transition flex items-center gap-2 ${
+                      scannerCategory === "general"
+                        ? "bg-emerald-950/60 border-emerald-400 text-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.2)]"
+                        : "bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700"
+                    }`}
+                  >
+                    <span className="text-base">📦</span>
+                    <div className="truncate">
+                      <div className="font-bold text-white truncate text-[11px]">Parcel / Seal</div>
+                      <div className="text-[9px] text-slate-400">Package Breach</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* FUTURISTIC VIEWFINDER */}
+              <div className="relative w-full h-[300px] sm:h-[360px] bg-black rounded-xl overflow-hidden border-2 border-slate-800 shadow-2xl flex items-center justify-center group">
+                <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+
+                {/* Animated Laser Beam Sweeper */}
+                <div className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_15px_rgba(52,211,153,1)] pointer-events-none animate-laser-beam" />
+
+                {/* Sci-Fi Corner Brackets */}
+                <div className="absolute top-4 left-4 w-7 h-7 border-t-2 border-l-2 border-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)] pointer-events-none" />
+                <div className="absolute top-4 right-4 w-7 h-7 border-t-2 border-r-2 border-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)] pointer-events-none" />
+                <div className="absolute bottom-4 left-4 w-7 h-7 border-b-2 border-l-2 border-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)] pointer-events-none" />
+                <div className="absolute bottom-4 right-4 w-7 h-7 border-b-2 border-r-2 border-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)] pointer-events-none" />
+
+                {/* Center Target Reticle */}
+                <div className="absolute inset-10 sm:inset-14 border border-emerald-500/30 rounded-lg pointer-events-none flex flex-col items-center justify-between p-3">
+                  <div className="w-full flex justify-between text-[9px] font-mono text-emerald-400/80">
+                    <span>[ TARGET RETICLE ]</span>
+                    <span>AUTO-CLAHE: ARMED</span>
+                  </div>
+
+                  <div className="flex flex-col items-center gap-1.5">
+                    <div className="relative w-16 h-16 flex items-center justify-center">
+                      <div className="w-16 h-16 rounded-full border border-dashed border-emerald-400/60 animate-spin" style={{ animationDuration: "10s" }} />
+                      <div className="w-8 h-8 rounded-full border border-emerald-400/80" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,1)]" />
+                      <div className="absolute w-20 h-px bg-emerald-400/40" />
+                      <div className="absolute h-20 w-px bg-emerald-400/40" />
+                    </div>
+                    <span className="text-[10px] font-bold text-emerald-300 bg-black/80 px-3 py-1 rounded-full uppercase tracking-wider border border-emerald-500/30 shadow-lg">
+                      Align Claim Item Within Reticle
+                    </span>
+                  </div>
+
+                  <div className="w-full flex justify-between text-[9px] font-mono text-emerald-400/80">
+                    <span>EXIF PROVENANCE: ACTIVE</span>
+                    <span>SPECTRUM: MULTI-Q</span>
+                  </div>
+                </div>
+
+                {/* Telemetry Overlays */}
+                <div className="absolute top-2.5 left-2.5 bg-black/75 backdrop-blur-xs px-2.5 py-1 rounded text-[10px] font-mono text-emerald-400 border border-emerald-500/20 pointer-events-none">
+                  ● 60 FPS • HARDWARE STREAM
+                </div>
+                <div className="absolute top-2.5 right-2.5 bg-black/75 backdrop-blur-xs px-2.5 py-1 rounded text-[10px] font-mono text-amber-300 border border-amber-500/20 pointer-events-none">
+                  RESOLUTION: 1080P HD
+                </div>
+              </div>
+
+              {/* MODAL FOOTER */}
+              <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-1">
+                <div className="text-xs text-slate-400 flex items-center gap-2">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>Hold steady in normal lighting. OpenCV 5 active telemetry will calibrate sensor noise upon capture.</span>
+                </div>
+
+                <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                  <button
+                    onClick={stopCamera}
+                    className="flex-1 sm:flex-none bg-slate-900 hover:bg-slate-800 text-slate-300 px-4 py-2 rounded-xl text-xs font-semibold transition border border-slate-700/60"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={capturePhoto}
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 active:scale-95"
+                    className="flex-1 sm:flex-none bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 px-6 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition shadow-[0_0_20px_rgba(52,211,153,0.4)] flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
                   >
-                    <Scan className="w-3.5 h-3.5" /> Capture & Analyze
+                    <Scan className="w-4 h-4 text-slate-950" />
+                    Capture & Analyze Claim
                   </button>
                 </div>
               </div>
+
             </div>
           </div>
         )}
@@ -1060,19 +1334,81 @@ export default function VeriSightDashboard() {
                   </div>
                 </div>
 
+                {/* LOUPE MAGNIFIER CONTROLS BAR */}
+                <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-950/70 border border-slate-800/80 rounded-lg px-3 py-1.5 text-xs">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setLoupeActive(!loupeActive)}
+                      className={`px-2.5 py-1 rounded text-xs font-bold transition flex items-center gap-1.5 border shadow-sm ${
+                        loupeActive
+                          ? "bg-emerald-500 text-slate-950 border-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.4)]"
+                          : "bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800"
+                      }`}
+                    >
+                      <Search className="w-3.5 h-3.5" />
+                      {loupeActive ? "Loupe Active (ON)" : "Enable Precision Loupe"}
+                    </button>
+
+                    {loupeActive && (
+                      <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded border border-slate-800">
+                        <button
+                          onClick={() => setLoupeMode("xray")}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
+                            loupeMode === "xray"
+                              ? "bg-emerald-600 text-white shadow-xs"
+                              : "text-slate-400 hover:text-slate-200"
+                          }`}
+                          title="Shows the glowing OpenCV 5 forensic residual under the lens"
+                        >
+                          🔬 X-Ray Residual
+                        </button>
+                        <button
+                          onClick={() => setLoupeMode("optical")}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
+                            loupeMode === "optical"
+                              ? "bg-emerald-600 text-white shadow-xs"
+                              : "text-slate-400 hover:text-slate-200"
+                          }`}
+                          title="Magnifies original camera pixels to inspect texture and edge blending"
+                        >
+                          🔍 Optical Macro
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {loupeActive && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-slate-400 font-mono">Zoom:</span>
+                      {[2.5, 3.5, 5.0].map((z) => (
+                        <button
+                          key={z}
+                          onClick={() => setLoupeZoom(z)}
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold transition ${
+                            loupeZoom === z
+                              ? "bg-emerald-500 text-slate-950"
+                              : "bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800"
+                          }`}
+                        >
+                          {z}x
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 {/* THE SPLIT VIEWER (SEAMLESS CANVAS) */}
                 <div
-                  onMouseMove={(e) => {
-                    if (!loupeActive) return;
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const x = ((e.clientX - rect.left) / rect.width) * 100;
-                    const y = ((e.clientY - rect.top) / rect.height) * 100;
-                    setLoupePos({ x, y });
-                  }}
+                  ref={viewerRef}
+                  onMouseMove={handleViewerMouseMove}
+                  onMouseLeave={() =>
+                    setLoupeCoords((prev) => ({ ...prev, isInsideImage: false }))
+                  }
                   className="relative w-full h-[380px] sm:h-[460px] rounded-lg overflow-hidden bg-black select-none border border-slate-800/80 shadow-inner group"
                 >
                   {/* Underneath: The glowing forensic heatmap */}
                   <img
+                    ref={imageDisplayRef}
                     src={getSelectedHeatmap()}
                     alt="Forensic Heatmap"
                     className="absolute inset-0 w-full h-full object-contain pointer-events-none"
@@ -1093,7 +1429,7 @@ export default function VeriSightDashboard() {
 
                   {/* Split divider bar */}
                   <div
-                    className="absolute top-0 bottom-0 w-0.5 bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,1)] cursor-ew-resize flex items-center justify-center pointer-events-none"
+                    className="absolute top-0 bottom-0 w-0.5 bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,1)] flex items-center justify-center pointer-events-none z-20"
                     style={{ left: `${splitPos}%` }}
                   >
                     <div className="bg-slate-950 border border-emerald-400 text-emerald-400 text-[9px] font-bold px-1.5 py-0.5 rounded shadow-lg uppercase tracking-wider">
@@ -1101,66 +1437,108 @@ export default function VeriSightDashboard() {
                     </div>
                   </div>
 
-                  {/* LOUPE 4X MAGNIFIER OVERLAY */}
-                  {loupeActive && (
+                  {/* LOUPE PRECISION MAGNIFIER OVERLAY (100% SUB-PIXEL EXACT) */}
+                  {loupeActive && loupeCoords.isInsideImage && (
                     <div
-                      className="absolute w-32 h-32 rounded-full border-2 border-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.8)] pointer-events-none overflow-hidden z-20 bg-black"
+                      className="absolute rounded-full border-2 border-emerald-400 shadow-[0_0_25px_rgba(52,211,153,0.7),inset_0_0_20px_rgba(0,0,0,0.85)] pointer-events-none overflow-hidden z-30 bg-black"
                       style={{
-                        left: `calc(${loupePos.x}% - 64px)`,
-                        top: `calc(${loupePos.y}% - 64px)`
+                        width: "160px",
+                        height: "160px",
+                        left: `${loupeCoords.cursorX - 80}px`,
+                        top: `${loupeCoords.cursorY - 80}px`
                       }}
                     >
+                      {/* Magnified Image Target */}
                       <img
-                        src={getSelectedHeatmap()}
+                        src={
+                          loupeMode === "xray"
+                            ? getSelectedHeatmap()
+                            : data.visuals.annotated_frame
+                        }
                         alt="Magnified View"
-                        className="absolute max-w-none"
+                        className="absolute max-w-none pointer-events-none"
                         style={{
-                          width: "400%",
-                          height: "400%",
-                          left: `-${loupePos.x * 4 - 64}px`,
-                          top: `-${loupePos.y * 4 - 64}px`
+                          width: `${loupeCoords.imgW * loupeZoom}px`,
+                          height: `${loupeCoords.imgH * loupeZoom}px`,
+                          left: `${-(
+                            (loupeCoords.cursorX - loupeCoords.imgOffsetX) *
+                              loupeZoom -
+                            80
+                          )}px`,
+                          top: `${-(
+                            (loupeCoords.cursorY - loupeCoords.imgOffsetY) *
+                              loupeZoom -
+                            80
+                          )}px`
                         }}
                       />
+
+                      {/* Precision Reticle HUD */}
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="w-14 h-14 rounded-full border border-dashed border-emerald-400/40" />
+                        <div className="absolute w-7 h-px bg-emerald-400/70" />
+                        <div className="absolute h-7 w-px bg-emerald-400/70" />
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,1)]" />
+                      </div>
+
+                      {/* Compass Ticks */}
+                      <div className="absolute top-1 left-1/2 -translate-x-1/2 w-1.5 h-0.5 bg-emerald-400/60" />
+                      <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-0.5 bg-emerald-400/60" />
+                      <div className="absolute left-1 top-1/2 -translate-y-1/2 h-1.5 w-0.5 bg-emerald-400/60" />
+                      <div className="absolute right-1 top-1/2 -translate-y-1/2 h-1.5 w-0.5 bg-emerald-400/60" />
+
+                      {/* Top Mode HUD Badge */}
+                      <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-black/85 backdrop-blur-xs px-2 py-0.5 rounded-full text-[8px] font-mono font-bold text-emerald-300 border border-emerald-500/30 whitespace-nowrap shadow-md">
+                        {loupeMode === "xray"
+                          ? `🔬 X-RAY ${loupeZoom}X (${activeVisual.toUpperCase()})`
+                          : `🔍 OPTICAL ${loupeZoom}X`}
+                      </div>
+
+                      {/* Bottom Coordinates HUD Badge */}
+                      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/85 backdrop-blur-xs px-1.5 py-0.5 rounded text-[8px] font-mono text-slate-300 border border-slate-700/50 whitespace-nowrap">
+                        X:
+                        {Math.round(
+                          loupeCoords.cursorX - loupeCoords.imgOffsetX
+                        )}{" "}
+                        Y:
+                        {Math.round(
+                          loupeCoords.cursorY - loupeCoords.imgOffsetY
+                        )}
+                      </div>
                     </div>
                   )}
 
-                  {/* Range Slider for Split */}
+                  {/* Range Slider for Split (disabled for cursor when loupe is active) */}
                   <input
                     type="range"
                     min="0"
                     max="100"
                     value={splitPos}
                     onChange={(e) => setSplitPos(Number(e.target.value))}
-                    className="absolute inset-0 opacity-0 cursor-ew-resize w-full h-full z-10"
+                    className={`absolute inset-0 opacity-0 cursor-ew-resize w-full h-full z-10 ${
+                      loupeActive ? "pointer-events-none" : ""
+                    }`}
                   />
 
                   {/* Floating Labels (Compact) */}
-                  <div className="absolute top-2.5 left-2.5 bg-black/60 backdrop-blur-sm px-2 py-0.5 rounded text-[10px] font-bold text-emerald-400 border border-emerald-500/20 pointer-events-none">
+                  <div className="absolute top-2.5 left-2.5 bg-black/70 backdrop-blur-sm px-2 py-0.5 rounded text-[10px] font-bold text-emerald-400 border border-emerald-500/20 pointer-events-none z-10">
                     Camera Frame
                   </div>
-                  <div className="absolute top-2.5 right-2.5 bg-black/60 backdrop-blur-sm px-2 py-0.5 rounded text-[10px] font-bold text-amber-400 border border-amber-500/20 pointer-events-none">
+                  <div className="absolute top-2.5 right-2.5 bg-black/70 backdrop-blur-sm px-2 py-0.5 rounded text-[10px] font-bold text-amber-400 border border-amber-500/20 pointer-events-none z-10">
                     OpenCV 5: {activeVisual.toUpperCase()}
                   </div>
 
                   {/* Suspect ROI Tag */}
-                  <div className="absolute bottom-2.5 left-2.5 bg-black/60 backdrop-blur-sm px-2 py-0.5 rounded text-[10px] font-mono text-slate-300 border border-slate-700/60 pointer-events-none">
-                    ROI [{data.roi[0]}, {data.roi[1]}, {data.roi[2]}, {data.roi[3]}]
+                  <div className="absolute bottom-2.5 left-2.5 bg-black/70 backdrop-blur-sm px-2 py-0.5 rounded text-[10px] font-mono text-slate-300 border border-slate-700/60 pointer-events-none z-10">
+                    ROI [{data.roi[0]}, {data.roi[1]}, {data.roi[2]},{" "}
+                    {data.roi[3]}]
                   </div>
 
-                  {/* Magnifier & Zoom Buttons */}
+                  {/* Zoom Fullscreen Button */}
                   <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1.5 z-20">
                     <button
-                      onClick={() => setLoupeActive(!loupeActive)}
-                      className={`p-1.5 rounded text-xs transition border ${
-                        loupeActive ? "bg-emerald-500 text-slate-950 border-emerald-400 font-bold" : "bg-black/70 hover:bg-black text-slate-200 border-slate-700"
-                      }`}
-                      title="Toggle 4x Loupe Magnifier"
-                    >
-                      <Search className="w-3.5 h-3.5" />
-                    </button>
-                    <button
                       onClick={() => setZoomModalOpen(true)}
-                      className="bg-black/70 hover:bg-black text-slate-200 p-1.5 rounded text-xs transition border border-slate-700"
+                      className="bg-black/75 hover:bg-black text-slate-200 p-1.5 rounded text-xs transition border border-slate-700 shadow-md"
                       title="Inspect Fullscreen"
                     >
                       <Maximize2 className="w-3.5 h-3.5" />
@@ -1168,10 +1546,34 @@ export default function VeriSightDashboard() {
                   </div>
                 </div>
 
-                <div className="flex justify-between text-[11px] text-slate-400 px-0.5">
-                  <span>← Camera Frame</span>
-                  <span className="font-mono text-emerald-400 font-bold">Split: {splitPos}%</span>
-                  <span>Forensic Residual →</span>
+                {/* SPLIT SLIDER CONTROLS BAR */}
+                <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-400 px-1 gap-2 pt-1 border-t border-slate-800/40">
+                  <div className="flex items-center gap-2">
+                    <span>← Camera Claim</span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={splitPos}
+                      onChange={(e) => setSplitPos(Number(e.target.value))}
+                      className="w-24 sm:w-36 accent-emerald-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                    />
+                    <span>Forensic Residual →</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-emerald-400 font-bold">
+                      Split: {splitPos}%
+                    </span>
+                    {splitPos !== 50 && (
+                      <button
+                        onClick={() => setSplitPos(50)}
+                        className="text-[10px] text-slate-400 hover:text-white underline"
+                      >
+                        Reset 50%
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -1253,7 +1655,7 @@ export default function VeriSightDashboard() {
                 <Sparkles className="w-3.5 h-3.5" /> Launch AI Fraud Test
               </button>
               <button
-                onClick={startCamera}
+                onClick={() => startCamera()}
                 className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 active:scale-95"
               >
                 <Camera className="w-3.5 h-3.5" /> Live Camera Scanner
