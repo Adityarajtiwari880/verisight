@@ -1,0 +1,12 @@
+# VeriSight MCP - Pinned Backend Dependencies
+# Verified on Python 3.12 / 3.14 on Windows & AWS Graviton Arm64 (Ubuntu 24.04)
+
+fastapi>=0.115.0
+uvicorn>=0.32.0
+python-multipart>=0.0.12
+numpy>=2.0.0
+opencv-python>=5.0.0.0; sys_platform != "linux"
+# Note: On AWS Graviton COOL AMI, use pre-installed /opt/cool OpenCV 5
+boto3>=1.35.0
+pydantic>=2.9.0
+requests>=2.32.0
