@@ -442,8 +442,10 @@ export default function VeriSightDashboard() {
   };
 
   // Human-readable clean verdict formatters
-  const isRejected = (humanOverride || data?.verdict)?.includes("REJECT");
-  const isReview = (humanOverride || data?.verdict)?.includes("REVIEW");
+  const verdictCode = humanOverride || data?.verdict;
+  const isInvalidSubject = verdictCode === "REJECT_INVALID_CLAIM_SUBJECT";
+  const isRejected = (verdictCode?.includes("REJECT") ?? false) && !isInvalidSubject;
+  const isReview = verdictCode?.includes("REVIEW") ?? false;
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased selection:bg-emerald-500 selection:text-black">
@@ -1002,7 +1004,9 @@ export default function VeriSightDashboard() {
               {/* FINAL AUTONOMOUS VERDICT BANNER (CLEAN, NO TEXT CLIPPING) */}
               <div
                 className={`border rounded-xl p-4 shadow-xl relative overflow-hidden backdrop-blur-sm ${
-                  isRejected
+                  isInvalidSubject
+                    ? "bg-amber-950/25 border-amber-500/50 text-amber-200"
+                    : isRejected
                     ? "bg-rose-950/30 border-rose-500/40 text-rose-200"
                     : isReview
                     ? "bg-amber-950/30 border-amber-500/40 text-amber-200"
@@ -1024,14 +1028,16 @@ export default function VeriSightDashboard() {
                   <div className="flex items-center gap-2">
                     <span
                       className={`text-xs uppercase font-extrabold px-2.5 py-0.5 rounded tracking-wide ${
-                        isRejected
+                        isInvalidSubject
+                          ? "bg-amber-500 text-slate-950 font-black shadow-sm"
+                          : isRejected
                           ? "bg-rose-600 text-white"
                           : isReview
                           ? "bg-amber-600 text-slate-950"
                           : "bg-emerald-600 text-white"
                       }`}
                     >
-                      {isRejected ? "Tamper Detected" : isReview ? "Review Required" : "Claim Approved"}
+                      {isInvalidSubject ? "Invalid Subject (Refused)" : isRejected ? "Tamper Detected" : isReview ? "Review Required" : "Claim Approved"}
                     </span>
                     <span className="text-xs font-mono font-bold text-white">
                       {data.tamper_probability}% Probability
@@ -1046,7 +1052,7 @@ export default function VeriSightDashboard() {
                 <div className="w-full bg-black/40 h-1.5 rounded-full overflow-hidden mb-3 border border-white/5">
                   <div
                     className={`h-full rounded-full transition-all duration-500 ${
-                      isRejected ? "bg-rose-500" : isReview ? "bg-amber-400" : "bg-emerald-400"
+                      isInvalidSubject ? "bg-amber-400" : isRejected ? "bg-rose-500" : isReview ? "bg-amber-400" : "bg-emerald-400"
                     }`}
                     style={{ width: `${Math.min(100, Math.max(8, data.tamper_probability))}%` }}
                   ></div>

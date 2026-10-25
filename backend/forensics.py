@@ -356,3 +356,100 @@ def tool_color_space_decomposition(img: np.ndarray) -> Dict[str, str]:
         "ycrcb": encode_img_base64(ycrcb),
         "hsv": encode_img_base64(hsv)
     }
+
+def tool_semantic_scene_triage(img_bgr: np.ndarray, claim_type: str = "") -> Dict[str, Any]:
+    """
+    Step 0-B: Autonomous Semantic Domain & Biometric Validation.
+    Analyzes visual subject structure before running forensics to ensure:
+    1. Human faces/portraits are flagged if submitted for non-biometric claims (e.g. invoice or produce).
+    2. Document claims have structured horizontal text gradients and quadrilateral boundaries.
+    3. Direct camera calibration tests are recognized and allowed.
+    """
+    t0 = time.perf_counter()
+    h, w = img_bgr.shape[:2]
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
+    ycrcb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2YCrCb)
+    
+    # 1. Biometric Skin & Face Detection
+    mask_hsv = cv2.inRange(hsv, np.array([3, 25, 45]), np.array([24, 175, 255]))
+    mask_ycrcb = cv2.inRange(ycrcb, np.array([0, 133, 77]), np.array([255, 173, 127]))
+    skin = cv2.bitwise_and(mask_hsv, mask_ycrcb)
+    
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
+    skin = cv2.morphologyEx(skin, cv2.MORPH_OPEN, kernel)
+    skin = cv2.morphologyEx(skin, cv2.MORPH_CLOSE, kernel)
+    
+    contours, _ = cv2.findContours(skin, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    total_area = h * w
+    faces = []
+    for c in contours:
+        area = cv2.contourArea(c)
+        if area > 0.035 * total_area: # Takes at least 3.5% of total frame
+            bx, by, bw, bh = cv2.boundingRect(c)
+            aspect = float(bh) / max(bw, 1)
+            if 0.85 <= aspect <= 2.3: # Facial aspect ratio
+                faces.append({
+                    "bbox": [int(bx), int(by), int(bw), int(bh)],
+                    "area_pct": round(float(area / total_area) * 100, 1)
+                })
+                
+    face_detected = len(faces) > 0
+    primary_face_bbox = faces[0]["bbox"] if face_detected else None
+    
+    # 2. Text line density (for invoices / receipts)
+    grad_x = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)
+    _, text_thresh = cv2.threshold(np.abs(grad_x), 35, 255, cv2.THRESH_BINARY)
+    kernel_text = cv2.getStructuringElement(cv2.MORPH_RECT, (25, 3))
+    text_lines = cv2.morphologyEx(text_thresh.astype(np.uint8), cv2.MORPH_CLOSE, kernel_text)
+    t_contours, _ = cv2.findContours(text_lines, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    text_boxes = [c for c in t_contours if cv2.boundingRect(c)[2] > 35 and cv2.boundingRect(c)[3] < 35]
+    text_lines_count = len(text_boxes)
+    has_document_structure = text_lines_count >= 5
+    
+    # 3. Claim Domain Analysis
+    c_lower = claim_type.lower()
+    is_camera_test = any(k in c_lower for k in ["camera", "sensor", "calibration", "direct", "hardware", "biometric"])
+    is_invoice_claim = any(k in c_lower for k in ["invoice", "receipt", "tax", "bill", "zepto"])
+    is_produce_claim = any(k in c_lower for k in ["produce", "fruit", "strawberry", "strawberries", "mold", "rot"])
+    is_auto_claim = any(k in c_lower for k in ["bumper", "car", "vehicle", "auto", "collision", "dent"])
+    
+    is_valid_subject = True
+    rejection_subcode = None
+    rejection_reason = None
+    
+    if is_camera_test:
+        # Camera sensor calibration welcomes faces, room, or any physical object
+        is_valid_subject = True
+    elif is_invoice_claim:
+        if face_detected:
+            is_valid_subject = False
+            rejection_subcode = "HUMAN_BIOMETRIC_MISMATCH"
+            rejection_reason = "Detected human face/portrait in commercial tax invoice refund claim. An official delivery receipt or tax invoice document is required."
+        elif not has_document_structure:
+            is_valid_subject = False
+            rejection_subcode = "MISSING_INVOICE_STRUCTURE"
+            rejection_reason = f"No structured invoice lines or receipt text detected (Text line count: {text_lines_count}). Please photograph the printed paper or digital bill."
+    elif is_produce_claim:
+        if face_detected:
+            is_valid_subject = False
+            rejection_subcode = "HUMAN_PORTRAIT_MISMATCH"
+            rejection_reason = "Detected human portrait in fresh produce refund claim. Please photograph the physical perishable product."
+    elif is_auto_claim:
+        if face_detected:
+            is_valid_subject = False
+            rejection_subcode = "HUMAN_PORTRAIT_MISMATCH"
+            rejection_reason = "Detected human portrait in automotive damage claim. Please photograph the vehicle body or bumper damage."
+            
+    latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+    return {
+        "is_valid_subject": is_valid_subject,
+        "face_detected": face_detected,
+        "faces_count": len(faces),
+        "primary_face_bbox": primary_face_bbox,
+        "has_document_structure": has_document_structure,
+        "text_lines_count": text_lines_count,
+        "rejection_subcode": rejection_subcode,
+        "rejection_reason": rejection_reason,
+        "latency_ms": latency_ms
+    }

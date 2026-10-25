@@ -79,7 +79,40 @@ def run_tests():
         )
         print("  Status:             PASSED (Fraud Detected)")
 
-    # 4. Check MCP Tools Listing
+    # 4. Test Semantic Mismatch (Human Face in Tax Invoice Claim)
+    import cv2
+    import numpy as np
+    test_face_img = np.full((480, 640, 3), (200, 200, 200), dtype=np.uint8)
+    cv2.ellipse(test_face_img, (320, 220), (90, 130), 0, 0, 360, (140, 175, 225), -1) # Face
+    cv2.ellipse(test_face_img, (320, 130), (95, 50), 0, 0, 360, (30, 30, 30), -1)   # Hair
+    cv2.ellipse(test_face_img, (320, 440), (180, 120), 0, 0, 360, (80, 80, 120), -1) # Shoulders
+    face_path = os.path.join(script_dir, "test_temp_face.jpg")
+    cv2.imwrite(face_path, test_face_img)
+
+    try:
+        res_mismatch = upload_claim(face_path, "Zepto Tax Invoice Claim")
+        print("\n--- Test Case 3: Semantic Mismatch (Face in Invoice Claim) ---")
+        print(f"  Verdict:            {res_mismatch['verdict']}")
+        print(f"  Autonomous Action:  {res_mismatch['action_taken']}")
+        assert res_mismatch["verdict"] == "REJECT_INVALID_CLAIM_SUBJECT", (
+            f"Expected REJECT_INVALID_CLAIM_SUBJECT, got: {res_mismatch['verdict']}"
+        )
+        print("  Status:             PASSED (Autonomous Refusal of Selfie in Invoice Claim)")
+
+        # Verify that an authentic camera capture IS APPROVED under Direct Camera Test
+        res_cam = upload_claim(genuine_path, "Direct Camera Sensor Test")
+        print("\n--- Test Case 4: Direct Camera Integrity Calibration ---")
+        print(f"  Verdict:            {res_cam['verdict']}")
+        print(f"  Autonomous Action:  {res_cam['action_taken']}")
+        assert res_cam["verdict"] == "AUTO_APPROVE_CLAIM", (
+            f"Expected AUTO_APPROVE_CLAIM for camera calibration, got: {res_cam['verdict']}"
+        )
+        print("  Status:             PASSED (Camera Calibration Allowed)")
+    finally:
+        if os.path.exists(face_path):
+            os.remove(face_path)
+
+    # 5. Check MCP Tools Listing
     req_mcp = urllib.request.Request(f"{BASE_URL}/mcp/tools")
     with urllib.request.urlopen(req_mcp, timeout=5) as resp:
         mcp_data = json.loads(resp.read().decode())
