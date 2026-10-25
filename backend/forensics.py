@@ -397,7 +397,10 @@ def tool_semantic_scene_triage(img_bgr: np.ndarray, claim_type: str = "") -> Dic
     face_detected = len(faces) > 0
     primary_face_bbox = faces[0]["bbox"] if face_detected else None
     
-    # 2. Text line density (for invoices / receipts)
+    # 2. Text line density and Paper Whiteness (for invoices / receipts)
+    paper_mask = (gray > 145) & (hsv[:, :, 1] < 55)
+    paper_ratio = np.count_nonzero(paper_mask) / float(total_area)
+
     grad_x = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)
     _, text_thresh = cv2.threshold(np.abs(grad_x), 35, 255, cv2.THRESH_BINARY)
     kernel_text = cv2.getStructuringElement(cv2.MORPH_RECT, (25, 3))
@@ -405,9 +408,18 @@ def tool_semantic_scene_triage(img_bgr: np.ndarray, claim_type: str = "") -> Dic
     t_contours, _ = cv2.findContours(text_lines, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     text_boxes = [c for c in t_contours if cv2.boundingRect(c)[2] > 35 and cv2.boundingRect(c)[3] < 35]
     text_lines_count = len(text_boxes)
-    has_document_structure = text_lines_count >= 5
+    has_document_structure = (text_lines_count >= 5) and (paper_ratio >= 0.28)
+
+    # 3. Organic Produce Pigmentation (Strawberries, Apples, Oranges, Mangoes, Greens)
+    m_red1 = cv2.inRange(hsv, np.array([0, 90, 115]), np.array([10, 255, 255]))
+    m_red2 = cv2.inRange(hsv, np.array([170, 90, 115]), np.array([180, 255, 255]))
+    m_yellow = cv2.inRange(hsv, np.array([11, 100, 130]), np.array([35, 255, 255]))
+    m_green = cv2.inRange(hsv, np.array([36, 75, 70]), np.array([85, 255, 255]))
+    produce_mask = m_red1 | m_red2 | m_yellow | m_green
+    produce_ratio = np.count_nonzero(produce_mask) / float(total_area)
+    has_produce_pigments = produce_ratio >= 0.04
     
-    # 3. Claim Domain Analysis
+    # 4. Claim Domain Analysis
     c_lower = claim_type.lower()
     is_camera_test = any(k in c_lower for k in ["camera", "sensor", "calibration", "direct", "hardware", "biometric"])
     is_invoice_claim = any(k in c_lower for k in ["invoice", "receipt", "tax", "bill", "zepto"])
@@ -429,12 +441,16 @@ def tool_semantic_scene_triage(img_bgr: np.ndarray, claim_type: str = "") -> Dic
         elif not has_document_structure:
             is_valid_subject = False
             rejection_subcode = "MISSING_INVOICE_STRUCTURE"
-            rejection_reason = f"No structured invoice lines or receipt text detected (Text line count: {text_lines_count}). Please photograph the printed paper or digital bill."
+            rejection_reason = f"No white document paper or structured invoice text lines detected (Paper area: {paper_ratio*100:.1f}%, Text lines: {text_lines_count}). Please frame the actual paper receipt or digital bill."
     elif is_produce_claim:
         if face_detected:
             is_valid_subject = False
             rejection_subcode = "HUMAN_PORTRAIT_MISMATCH"
             rejection_reason = "Detected human portrait in fresh produce refund claim. Please photograph the physical perishable product."
+        elif not has_produce_pigments:
+            is_valid_subject = False
+            rejection_subcode = "NO_PRODUCE_DETECTED"
+            rejection_reason = f"No organic fresh produce or perishable food pigmentation detected in frame (Produce color index: {produce_ratio*100:.1f}%). Please photograph the claimed grocery item."
     elif is_auto_claim:
         if face_detected:
             is_valid_subject = False

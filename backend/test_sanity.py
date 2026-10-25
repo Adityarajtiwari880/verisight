@@ -56,7 +56,7 @@ def run_tests():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     genuine_path = os.path.join(script_dir, "1_genuine_claim.jpg")
     if os.path.exists(genuine_path):
-        res_g = upload_claim(genuine_path, "Genuine Fresh Fruit Claim")
+        res_g = upload_claim(genuine_path, "Commercial Delivery Package Claim")
         print("\n--- Test Case 1: Genuine Unedited Image ---")
         print(f"  Verdict:            {res_g['verdict']}")
         print(f"  Tamper Probability: {res_g['tamper_probability']}%")
@@ -108,6 +108,32 @@ def run_tests():
             f"Expected AUTO_APPROVE_CLAIM for camera calibration, got: {res_cam['verdict']}"
         )
         print("  Status:             PASSED (Camera Calibration Allowed)")
+
+        # Test Case 5: Non-Produce Object (e.g. Denim Jeans / Purse) in Fresh Produce Claim
+        test_jeans = np.full((480, 640, 3), (110, 60, 35), dtype=np.uint8) # Dark blue denim
+        jeans_path = os.path.join(script_dir, "test_temp_jeans.jpg")
+        cv2.imwrite(jeans_path, test_jeans)
+        try:
+            res_jeans_fruit = upload_claim(jeans_path, "Real-Life Quick-Commerce Produce Claim")
+            print("\n--- Test Case 5: Non-Produce Object (Jeans/Purse) in Produce Claim ---")
+            print(f"  Verdict:            {res_jeans_fruit['verdict']}")
+            print(f"  Autonomous Action:  {res_jeans_fruit['action_taken']}")
+            assert res_jeans_fruit["verdict"] == "REJECT_INVALID_CLAIM_SUBJECT", (
+                f"Expected REJECT_INVALID_CLAIM_SUBJECT, got: {res_jeans_fruit['verdict']}"
+            )
+            print("  Status:             PASSED (Autonomous Refusal of Purse/Jeans in Produce Claim)")
+
+            res_jeans_invoice = upload_claim(jeans_path, "Real-Life Quick-Commerce Tax Invoice Claim")
+            print("\n--- Test Case 6: Non-Document Object (Jeans/Purse) in Invoice Claim ---")
+            print(f"  Verdict:            {res_jeans_invoice['verdict']}")
+            print(f"  Autonomous Action:  {res_jeans_invoice['action_taken']}")
+            assert res_jeans_invoice["verdict"] == "REJECT_INVALID_CLAIM_SUBJECT", (
+                f"Expected REJECT_INVALID_CLAIM_SUBJECT, got: {res_jeans_invoice['verdict']}"
+            )
+            print("  Status:             PASSED (Autonomous Refusal of Purse/Jeans in Invoice Claim)")
+        finally:
+            if os.path.exists(jeans_path):
+                os.remove(jeans_path)
     finally:
         if os.path.exists(face_path):
             os.remove(face_path)
