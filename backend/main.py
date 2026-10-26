@@ -68,6 +68,14 @@ REAL_LIFE_SAMPLES = [
         "description": "Customer files ₹18,500 insurance claim showing a crumpled dent and paint scratch on a silver bumper. The damage was synthetically generated.",
         "file_name": "sample_real_car_bumper_dent.jpg",
         "ground_truth": "TAMPERED_FRAUD"
+    },
+    {
+        "id": "real_car_card",
+        "title": "Printed Card Recapture Attack (Physical PAD)",
+        "category": "Auto Insurance Claim - Presentation Attack",
+        "description": "Customer submits a photograph of a printed card showing an undamaged car to claim ₹22,000 bumper repair. Caught by Physical Presentation Attack Detection (PAD).",
+        "file_name": "test_car_card_crop.jpg",
+        "ground_truth": "RECAPTURED_2D_MEDIA"
     }
 ]
 
@@ -78,6 +86,7 @@ def build_preset_image(preset_id: str) -> tuple[np.ndarray, bytes]:
     strawberries_path = os.path.join(BACKEND_DIR, "sample_real_strawberries_inpainted.jpg")
     invoice_path = os.path.join(BACKEND_DIR, "sample_real_invoice_tampered.jpg")
     bumper_path = os.path.join(BACKEND_DIR, "sample_real_car_bumper_dent.jpg")
+    card_path = os.path.join(BACKEND_DIR, "test_car_card_crop.jpg")
 
     def read_with_bytes(path):
         with open(path, "rb") as f:
@@ -94,6 +103,8 @@ def build_preset_image(preset_id: str) -> tuple[np.ndarray, bytes]:
         return read_with_bytes(invoice_path)
     elif preset_id == "real_bumper" and os.path.exists(bumper_path):
         return read_with_bytes(bumper_path)
+    elif preset_id == "real_car_card" and os.path.exists(card_path):
+        return read_with_bytes(card_path)
     elif preset_id == "whatsapp_dark":
         base_img = cv2.imread(genuine_path) if os.path.exists(genuine_path) else np.full((480, 640, 3), (140, 175, 205), dtype=np.uint8)
         dark = (base_img.astype(np.float32) * 0.28).astype(np.uint8)
@@ -266,6 +277,16 @@ def mcp_agent_callback(tool_name: str, arguments: Dict[str, Any]) -> Any:
         }
     elif tool_name == "verisight_cloud_ledger_audit":
         return aws_adapter.get_audit_history(limit=arguments.get("limit", 5))
+    elif tool_name == "verisight_recapture_pad_analysis":
+        preset = arguments.get("preset", "real_car_card")
+        img, _ = build_preset_image(preset)
+        from forensics import tool_recapture_pad_analysis
+        return tool_recapture_pad_analysis(img, arguments.get("claim_type", "Auto Insurance Claim"))
+    elif tool_name == "verisight_verify_vehicle_damage":
+        preset = arguments.get("preset", "real_bumper")
+        img, _ = build_preset_image(preset)
+        from forensics import tool_vehicle_damage_verification
+        return tool_vehicle_damage_verification(img)
     else:
         return {"status": "success", "tool_executed": tool_name, "parameters": arguments}
 

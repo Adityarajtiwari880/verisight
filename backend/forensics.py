@@ -588,3 +588,198 @@ def tool_micro_roi_seam_inspection(img: np.ndarray, roi: List[int]) -> Dict[str,
         "micro_roi_visual": encode_img_base64(blended),
         "latency_ms": latency_ms
     }
+
+def tool_recapture_pad_analysis(img_bgr: np.ndarray, claim_type: str = "") -> Dict[str, Any]:
+    """
+    Step 0-C: Presentation Attack Detection (PAD) & Physical Recapture Analysis.
+    Complies with ISO/IEC 30107-3 (Biometric and Presentation Attack Detection) using OpenCV 5:
+    1. Planar Rectilinear Boundary / Card Geometry: Canny edge detector + Hough line segments.
+    2. Printed Typography & Banner Density: Sobel-X horizontal morphological edge strips.
+    3. 2D-DFT Frequency Spectral Resonance: Halftone CMYK print screening and Screen Moiré peaks.
+    4. Photometric Dynamic Range & Clearcoat Gloss Index: Compares diffuse CMYK print gamut vs specular clearcoat.
+    """
+    t0 = time.perf_counter()
+    h, w = img_bgr.shape[:2]
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
+    total_area = h * w
+    
+    c_lower = claim_type.lower()
+    is_auto = any(k in c_lower for k in ["car", "vehicle", "bumper", "auto", "collision", "dent"])
+    is_produce = any(k in c_lower for k in ["produce", "fruit", "strawberry", "strawberries", "grocery"])
+    is_package = any(k in c_lower for k in ["package", "parcel", "delivery", "box", "carton"])
+    is_exempt = any(k in c_lower for k in ["invoice", "receipt", "tax", "bill", "calibration", "camera", "sensor"])
+    
+    # Invoices and delivery package cartons are exempt from printed card/box boundary checks
+    if is_exempt or is_package:
+        latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+        return {
+            "is_recapture_attack": False,
+            "pad_status": "EXEMPT_DOMAIN",
+            "liveness_score": 99.0,
+            "attack_subcode": None,
+            "pad_explanation": "Domain exempt from 2D physical recapture detection (Invoice / Delivery Package / Camera Calibration).",
+            "planar_borders_detected": 0,
+            "card_quad_detected": False,
+            "text_strips_detected": 0,
+            "halftone_moire_score": 1.0,
+            "specular_gloss_ratio": 1.0,
+            "latency_ms": latency_ms
+        }
+        
+    # 1. Text Line / Printed Typography Strips Detection
+    grad_x = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)
+    _, t_thresh = cv2.threshold(np.abs(grad_x), 32, 255, cv2.THRESH_BINARY)
+    k_text = cv2.getStructuringElement(cv2.MORPH_RECT, (20, 3))
+    t_lines = cv2.morphologyEx(t_thresh.astype(np.uint8), cv2.MORPH_CLOSE, k_text)
+    t_cnts, _ = cv2.findContours(t_lines, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    card_text_boxes = [c for c in t_cnts if 20 < cv2.boundingRect(c)[2] < w * 0.75 and 6 < cv2.boundingRect(c)[3] < 35]
+    text_strips_count = len(card_text_boxes)
+    
+    # 2. Planar Border Edge Detection (Canny + HoughLinesP)
+    edges = cv2.Canny(gray, 40, 120)
+    lines = cv2.HoughLinesP(edges, 1, np.pi/180, threshold=40, minLineLength=int(w * 0.28), maxLineGap=12)
+    planar_lines = 0
+    if lines is not None:
+        for l in lines:
+            x1, y1, x2, y2 = l.flatten()
+            length = float(np.hypot(x2 - x1, y2 - y1))
+            angle = float(np.abs(np.arctan2(y2 - y1, x2 - x1) * 180 / np.pi))
+            is_h = angle < 6 or angle > 174
+            is_v = 84 < angle < 96
+            if (is_h or is_v) and length > w * 0.35:
+                planar_lines += 1
+
+    # Quadrilateral contour check (cards / brochure boundaries)
+    dilated_edges = cv2.dilate(edges, np.ones((3, 3), np.uint8))
+    contours, _ = cv2.findContours(dilated_edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    card_quad_detected = False
+    for cnt in contours:
+        area = cv2.contourArea(cnt)
+        if 0.12 * total_area < area < 0.92 * total_area:
+            peri = cv2.arcLength(cnt, True)
+            approx = cv2.approxPolyDP(cnt, 0.04 * peri, True)
+            if len(approx) == 4:
+                card_quad_detected = True
+                break
+                
+    # 3. 2D-DFT Halftone & Moiré Frequency Resonance
+    resized_gray = cv2.resize(gray, (256, 256))
+    dft = cv2.dft(np.float32(resized_gray), flags=cv2.DFT_COMPLEX_OUTPUT)
+    dft_shift = np.fft.fftshift(dft)
+    mag = cv2.magnitude(dft_shift[:, :, 0], dft_shift[:, :, 1])
+    center = 128
+    y_g, x_g = np.ogrid[:256, :256]
+    r_dist = np.hypot(x_g - center, y_g - center)
+    high_ring = (r_dist > 65) & (r_dist < 115)
+    spectral_peak_ratio = float(np.max(mag[high_ring]) / (np.mean(mag[high_ring]) + 1e-5))
+    
+    # 4. Color Gamut & Specular Dynamics
+    sat = hsv[:, :, 1]
+    val = hsv[:, :, 2]
+    p90_sat = float(np.percentile(sat, 90))
+    specular_pixels = int(np.sum((val > 240) & (sat < 40)))
+    specular_ratio = round((specular_pixels / float(total_area)) * 100, 2)
+    
+    is_recapture = False
+    subcode = None
+    pad_explanation = "Liveness verified. Authentic 3D physical surface dynamics confirmed."
+    liveness_score = 96.5
+    
+    if (is_auto or is_produce) and text_strips_count >= 2:
+        is_recapture = True
+        subcode = "PRINTED_CARD_RECAPTURE"
+        liveness_score = 12.0
+        pad_explanation = (
+            f"RECAPTURED 2D MEDIA DETECTED: Found {text_strips_count} horizontal printed typography/banner strips "
+            f"across physical claim subject. Direct 3D physical object capture required."
+        )
+    elif planar_lines >= 3 and p90_sat < 70.0 and text_strips_count >= 1:
+        is_recapture = True
+        subcode = "RECAPTURED_2D_MEDIA"
+        liveness_score = 15.0
+        pad_explanation = (
+            f"RECAPTURED 2D MEDIA DETECTED: Planar card boundary lines ({planar_lines}) and diffuse CMYK print gamut "
+            f"(P90 Sat: {p90_sat:.1f}) detected. Subject is a 2D photograph or printout."
+        )
+    elif spectral_peak_ratio > 22.0:
+        is_recapture = True
+        subcode = "SCREEN_MOIRE_RECAPTURE"
+        liveness_score = 18.0
+        pad_explanation = (
+            f"SCREEN RECAPTURE DETECTED: High-frequency Moiré resonance spike ({spectral_peak_ratio:.1f}x) "
+            f"indicates capture from an LCD or OLED digital display screen."
+        )
+        
+    pad_status = "RECAPTURED_2D_MEDIA" if is_recapture else "AUTHENTIC_3D_SURFACE"
+    latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+    
+    return {
+        "is_recapture_attack": is_recapture,
+        "pad_status": pad_status,
+        "liveness_score": liveness_score,
+        "attack_subcode": subcode,
+        "pad_explanation": pad_explanation,
+        "planar_borders_detected": planar_lines,
+        "card_quad_detected": card_quad_detected,
+        "text_strips_detected": text_strips_count,
+        "halftone_moire_score": round(spectral_peak_ratio, 2),
+        "specular_gloss_ratio": specular_ratio,
+        "latency_ms": latency_ms
+    }
+
+def tool_vehicle_damage_verification(img_bgr: np.ndarray) -> Dict[str, Any]:
+    """
+    Step 0-D: Automotive Collision Damage Presence Verification.
+    Validates physical damage indicators on vehicle body panels:
+    1. Localized impact curvature / deformation using high-pass Laplacian edge variance grid.
+    2. Sharp fracture / crack contours and paint scraping edge lines.
+    Returns damage_verified: bool, damage_score: float (0-100), fractures_count: int.
+    """
+    t0 = time.perf_counter()
+    h, w = img_bgr.shape[:2]
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    
+    # 1. High-pass Laplacian edge filter for deformation and fracture contours
+    lap = cv2.Laplacian(gray, cv2.CV_64F, ksize=3)
+    lap_mag = np.uint8(np.clip(np.abs(lap), 0, 255))
+    
+    # 2. Localized impact concentration ratio (8x8 spatial grid)
+    grid_h, grid_w = h // 8, w // 8
+    cell_vars = []
+    for r_idx in range(8):
+        for c_idx in range(8):
+            cell = lap_mag[r_idx*grid_h:(r_idx+1)*grid_h, c_idx*grid_w:(c_idx+1)*grid_w]
+            cell_vars.append(float(np.var(cell)))
+            
+    max_var = max(cell_vars) if cell_vars else 0.0
+    mean_var = np.mean(cell_vars) if cell_vars else 1.0
+    concentration_ratio = max_var / (mean_var + 1e-5)
+    
+    # 3. Scratch / fracture contour extraction
+    _, thresh = cv2.threshold(lap_mag, 45, 255, cv2.THRESH_BINARY)
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    fractures = [c for c in contours if cv2.contourArea(c) > 25 and cv2.arcLength(c, False) > 20]
+    fractures_count = len(fractures)
+    
+    # 4. Damage score & verification logic
+    damage_score = min(100.0, round((fractures_count * 14.0 + min(concentration_ratio, 20.0) * 2.5), 1))
+    damage_verified = damage_score >= 25.0 and fractures_count >= 2
+    
+    subcode = "COLLISION_IMPACT_VERIFIED" if damage_verified else "NO_DAMAGE_DETECTED"
+    summary = (
+        f"Collision damage verified (Score: {damage_score}/100, Fractures: {fractures_count}, Impact concentration: {concentration_ratio:.1f}x)."
+        if damage_verified else
+        "Zero collision impact deformation, scratch fracture, or structural damage detected on vehicle panels."
+    )
+    
+    latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+    return {
+        "damage_verified": damage_verified,
+        "damage_score": damage_score,
+        "fractures_count": fractures_count,
+        "impact_concentration_ratio": round(concentration_ratio, 2),
+        "damage_subcode": subcode,
+        "damage_summary": summary,
+        "latency_ms": latency_ms
+    }

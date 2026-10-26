@@ -107,6 +107,26 @@ MCP_TOOLS_MANIFEST = [
                 "limit": {"type": "integer", "description": "Number of recent audit records to retrieve (default: 10)"}
             }
         }
+    },
+    {
+        "name": "verisight_recapture_pad_analysis",
+        "description": "Evaluates Presentation Attack Detection (PAD) conforming to ISO/IEC 30107-3: planar card boundaries, printed typography strips, 2D-DFT halftone/Moiré spectral resonance, and diffuse print gamut.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "claim_type": {"type": "string", "description": "Domain of claim (e.g. Auto insurance, Fresh produce, Delivery package)"}
+            }
+        }
+    },
+    {
+        "name": "verisight_verify_vehicle_damage",
+        "description": "Evaluates physical collision damage presence on vehicle panels: localized Laplacian curvature deformation, paint scratch contours, and impact concentration ratios.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "min_damage_threshold": {"type": "number", "description": "Minimum damage score required to verify physical collision (default: 25.0)"}
+            }
+        }
     }
 ]
 

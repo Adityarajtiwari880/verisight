@@ -175,7 +175,21 @@ def run_tests():
         )
         print("  Status:             PASSED (Autonomous Detection of Reused Photo via pHash)")
 
-    # 6. Check MCP Tools Listing & JSON-RPC
+    # 6. Test Case 8: Presentation Attack Detection (2D Card Print Attack)
+    card_path = os.path.join(script_dir, "test_car_card_crop.jpg")
+    if os.path.exists(card_path):
+        res_card = upload_claim(card_path, "Auto Insurance Claim")
+        verify_forensic_contract(res_card, "Test Case 8 PAD Card Recapture")
+        print("\n--- Test Case 8: Presentation Attack (Printed Card Recapture) ---")
+        print(f"  Verdict:            {res_card['verdict']}")
+        print(f"  Tamper Probability: {res_card['tamper_probability']}%")
+        print(f"  Autonomous Action:  {res_card['action_taken']}")
+        assert res_card["verdict"] in ["REJECT_RECAPTURED_2D_MEDIA", "REJECT_NO_DAMAGE_DETECTED"], (
+            f"Expected REJECT_RECAPTURED_2D_MEDIA or REJECT_NO_DAMAGE_DETECTED, got: {res_card['verdict']}"
+        )
+        print("  Status:             PASSED (Presentation Attack Detected & Refused)")
+
+    # 7. Check MCP Tools Listing & JSON-RPC
     req_mcp = urllib.request.Request(f"{BASE_URL}/mcp/tools")
     with urllib.request.urlopen(req_mcp, timeout=5) as resp:
         mcp_data = json.loads(resp.read().decode())

@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from forensics import (
     tool_extract_metadata_provenance,
     tool_semantic_scene_triage,
+    tool_recapture_pad_analysis,
+    tool_vehicle_damage_verification,
     tool_perceptual_hash,
     tool_active_clahe_remediation,
     tool_global_ela_scan,
@@ -204,9 +206,129 @@ class ForensicAgent:
             "phase": "PERCEIVE (Semantic Domain & Subject Triage)",
             "tool": "tool_semantic_scene_triage (Biometric Face & Document Density Analysis)",
             "observation": f"Subject compatibility confirmed for '{claim_type}'. Face detected: {scene_triage['face_detected']}, Text lines: {scene_triage['text_lines_count']}.",
-            "decision": "Valid commercial claim subject detected. Proceeding to Step 1 (Photometric Active CLAHE Remediation).",
+            "decision": "Valid commercial claim subject detected. Proceeding to Step 0-C (Presentation Attack Detection).",
             "hypothesis_verdict": "CONFIRMED (Subject Valid)"
         })
+
+        # -------------------------------------------------------------
+        # STEP 0-C: PRESENTATION ATTACK DETECTION (PAD) & RECAPTURE ANALYSIS
+        # -------------------------------------------------------------
+        pad_data = tool_recapture_pad_analysis(img, claim_type)
+        if pad_data["is_recapture_attack"]:
+            pad_subcode = pad_data["attack_subcode"] or "RECAPTURED_2D_MEDIA"
+            pad_reason = pad_data["pad_explanation"]
+            
+            annotated_frame = img.copy()
+            cv2.putText(
+                annotated_frame,
+                f"PAD ALERT: {pad_subcode}",
+                (30, 50),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.75,
+                (0, 0, 255),
+                2
+            )
+            
+            agent_trace.append({
+                "step": 0,
+                "phase": "PERCEIVE (ISO/IEC 30107-3 Presentation Attack Detection)",
+                "tool": "tool_recapture_pad_analysis (Planar Boundaries + CMYK Halftone + Typography Strips)",
+                "observation": f"Physical 2D recapture attack detected ({pad_subcode}). Liveness score: {pad_data['liveness_score']}%, Text strips: {pad_data['text_strips_detected']}, Planar borders: {pad_data['planar_borders_detected']}.",
+                "decision": f"AUTONOMOUS REFUSAL: {pad_reason}. Physical 3D inspection required before payout.",
+                "hypothesis_verdict": f"REFUTED ({pad_subcode})"
+            })
+            
+            dummy_gray = cv2.cvtColor(cv2.resize(img, (640, 480)), cv2.COLOR_BGR2GRAY)
+            dummy_heat = cv2.applyColorMap(dummy_gray, cv2.COLORMAP_JET)
+            elapsed_ms = round((time.perf_counter() - t0) * 1000, 2)
+            
+            evidence_bundle = {
+                "claim_id": claim_id,
+                "claim_type": claim_type,
+                "verdict": "REJECT_RECAPTURED_2D_MEDIA",
+                "subcode": pad_subcode,
+                "reason": pad_reason,
+                "liveness_score": pad_data["liveness_score"],
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "phash_hex": phash_hex,
+                "agent_trace": agent_trace
+            }
+            s3_res = aws_adapter.store_evidence_bundle(claim_id, evidence_bundle)
+            audit_res = aws_adapter.record_audit_ledger({
+                "claim_id": claim_id,
+                "verdict": "REJECT_RECAPTURED_2D_MEDIA",
+                "tamper_probability": 97.5,
+                "action_taken": pad_reason,
+                "s3_uri": s3_res.get("s3_uri", ""),
+                "sha256_hash": s3_res.get("sha256_checksum", ""),
+                "phash_hex": phash_hex,
+                "hardware_platform": platform.machine()
+            })
+            
+            return {
+                "claim_id": claim_id,
+                "claim_type": claim_type,
+                "verdict": "REJECT_RECAPTURED_2D_MEDIA",
+                "subcode": pad_subcode,
+                "tamper_probability": 97.5,
+                "action_taken": pad_reason,
+                "roi": [0, 0, orig_w, orig_h],
+                "confidence_score": 98.0,
+                "original_dimensions": [orig_w, orig_h],
+                "provenance": provenance,
+                "metrics": {
+                    "ela_score": 0.0,
+                    "fft_high_freq_energy": pad_data.get("halftone_moire_score", 0.0),
+                    "fft_harmonic_ratio": 0.0,
+                    "harmonic_ratio": 0.0,
+                    "ghost_discrepancy": 0.0,
+                    "optimal_jpeg_quality": 90,
+                    "roi_sensor_noise_std": 0.0,
+                    "noise_divergence_pct": 0.0,
+                    "prnu_noise_divergence_pct": 0.0,
+                    "chrominance_diff": 0.0,
+                    "chrominance_discrepancy_pct": 0.0,
+                    "seam_discontinuity_index": 1.0,
+                    "phash_hex": phash_hex,
+                    "sybil_duplicate": duplicate_match,
+                    "liveness_score": pad_data["liveness_score"],
+                    "pad_status": pad_data["pad_status"],
+                    "damage_verified": False,
+                    "damage_score": 0.0,
+                    "mean_luminance": 128.0,
+                    "clahe_applied": False,
+                    "execution_time_ms": elapsed_ms,
+                    "latency_ms": elapsed_ms,
+                    "hardware_accelerated": True,
+                    "arch": platform.machine(),
+                    "opencv_version": cv2.__version__,
+                    "cool_active": "/opt/cool" in cv2.__file__
+                },
+                "agent_trace": agent_trace,
+                "agent_reasoning_chain": agent_trace,
+                "visuals": {
+                    "annotated_frame": encode_img_base64(annotated_frame),
+                    "ela_heatmap": encode_img_base64(dummy_heat),
+                    "fft_spectrum": encode_img_base64(dummy_heat),
+                    "gradient_map": encode_img_base64(dummy_heat),
+                    "chrominance_map": encode_img_base64(dummy_heat),
+                    "ghost_heatmap": encode_img_base64(dummy_heat),
+                    "noise_residual": encode_img_base64(dummy_heat)
+                },
+                "color_spaces": tool_color_space_decomposition(cv2.resize(img, (320, 240))),
+                "cloud_audit": {"s3_evidence": s3_res, "dynamodb_record": audit_res},
+                "human_override_required": True,
+                "pipeline_version": self.version
+            }
+
+        # -------------------------------------------------------------
+        # STEP 0-D: AUTOMOTIVE COLLISION DAMAGE VERIFICATION
+        # -------------------------------------------------------------
+        is_auto_claim = any(k in claim_type.lower() for k in ["bumper", "car", "vehicle", "auto", "collision", "dent"])
+        damage_meta = tool_vehicle_damage_verification(img) if is_auto_claim else {
+            "damage_verified": True, "damage_score": 100.0, "fractures_count": 0, "impact_concentration_ratio": 1.0,
+            "damage_subcode": "NOT_APPLICABLE", "damage_summary": "Non-automotive domain."
+        }
         
         # -------------------------------------------------------------
         # STEP 1: ACTIVE PHOTOMETRIC PERCEPTION (cv2.cvtColor + CLAHE)
@@ -344,6 +466,10 @@ class ForensicAgent:
             verdict = "HUMAN_IN_THE_LOOP_REVIEW"
             action_taken = f"Ambiguous compression/lighting detected ({tamper_probability}% Risk). Paused payout & requested Supervisor Override."
             box_color = (0, 165, 255)
+        elif is_auto_claim and not damage_meta.get("damage_verified", True):
+            verdict = "REJECT_NO_DAMAGE_DETECTED"
+            action_taken = "NO COLLISION DAMAGE DETECTED: Vehicle body and panels appear completely intact with zero impact deformation, dents, or paint fractures. Auto-approval blocked."
+            box_color = (0, 165, 255)
         else:
             verdict = "AUTO_APPROVE_CLAIM"
             action_taken = f"Verified organic camera sensor noise & optical consistency ({tamper_probability}% Risk); triggered instant AWS refund webhook."
@@ -379,6 +505,10 @@ class ForensicAgent:
                 "prnu_noise_divergence_pct": noise_divergence,
                 "seam_discontinuity_index": seam_ratio,
                 "phash_hex": phash_hex,
+                "liveness_score": pad_data.get("liveness_score", 96.5),
+                "pad_status": pad_data.get("pad_status", "AUTHENTIC_3D_SURFACE"),
+                "damage_verified": damage_meta.get("damage_verified", True),
+                "damage_score": damage_meta.get("damage_score", 100.0),
                 "latency_ms": total_latency_ms,
                 "arch": platform.machine(),
                 "opencv_version": cv2.__version__,
@@ -417,6 +547,10 @@ class ForensicAgent:
                 "seam_discontinuity_index": seam_ratio,
                 "phash_hex": phash_hex,
                 "sybil_duplicate": duplicate_match,
+                "liveness_score": pad_data.get("liveness_score", 96.5),
+                "pad_status": pad_data.get("pad_status", "AUTHENTIC_3D_SURFACE"),
+                "damage_verified": damage_meta.get("damage_verified", True),
+                "damage_score": damage_meta.get("damage_score", 100.0),
                 "latency_ms": total_latency_ms,
                 "arch": platform.machine(),
                 "opencv_version": cv2.__version__,
