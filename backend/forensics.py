@@ -140,14 +140,28 @@ def tool_global_ela_scan(img: np.ndarray, quality: int = 90) -> Tuple[np.ndarray
     contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
     suspect_roi = [int(w * 0.25), int(h * 0.25), int(w * 0.5), int(h * 0.5)]
-    max_area = 0
-    min_area_thresh = (w * h) * 0.0015 # Capped for small inpainting regions
+    total_frame_area = w * h
+    min_area_thresh = total_frame_area * 0.001
+    best_score = -1.0
     
     for cnt in contours:
         area = cv2.contourArea(cnt)
-        if area > max_area and area > min_area_thresh:
-            max_area = area
-            x, y, cw, ch = cv2.boundingRect(cnt)
+        if area < min_area_thresh:
+            continue
+        x, y, cw, ch = cv2.boundingRect(cnt)
+        # Exclude contours that span almost the entire frame (>70% width and >70% height or >45% area)
+        # which represent document margins or full-frame borders rather than localized inpainting patches
+        if (cw > 0.70 * w and ch > 0.70 * h) or area > 0.45 * total_frame_area:
+            continue
+            
+        mask_cnt = np.zeros(blurred.shape, dtype=np.uint8)
+        cv2.drawContours(mask_cnt, [cnt], -1, 255, -1)
+        cnt_p95 = float(np.percentile(blurred[mask_cnt > 0], 95)) if np.any(mask_cnt > 0) else 0.0
+        # Anomaly density score: prioritizes intense localized inpainting patches over huge background blobs
+        score = cnt_p95 * np.log10(area + 10.0)
+        
+        if score > best_score:
+            best_score = score
             pad_x = int(cw * 0.08)
             pad_y = int(ch * 0.08)
             rx = max(0, x - pad_x)

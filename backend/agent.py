@@ -421,24 +421,52 @@ class ForensicAgent:
                 "hypothesis_verdict": "CONFIRMED (Feathered Seam)" if is_feathered else "REFUTED (Continuous)"
             })
 
+        # Physical CMOS sensor noise std
+        gray_frame = cv2.cvtColor(working_img, cv2.COLOR_BGR2GRAY)
+        denoised_frame = cv2.medianBlur(gray_frame, 3)
+        noise_frame = cv2.absdiff(gray_frame, denoised_frame).astype(np.float32)
+        sensor_noise_std = float(np.std(noise_frame))
+
         # -------------------------------------------------------------
         # STEP 4: CALIBRATED MULTI-SPECTRAL RISK FUSION
         # -------------------------------------------------------------
         clusters_detected = ela_meta.get("clusters_detected", 0)
-        has_isolated_cluster = (clusters_detected > 0 and ela_score > 28.0)
+        rx, ry, rw, rh = roi
+        is_full_frame = (rw > 0.65 * working_dim[0] and rh > 0.65 * working_dim[1])
+        has_isolated_cluster = not is_full_frame and (clusters_detected > 0) and (ela_score > 25.0)
 
-        # Multi-modal calibrated risk combining all forensic modalities:
-        ela_contrib = max(0.0, (ela_score - 22.0) * 0.70)
-        chrom_contrib = max(0.0, (chrom_diff - 30.0) * 0.45) if has_isolated_cluster else 0.0
-        noise_contrib = max(0.0, (noise_divergence - 80.0) * 0.35) if has_isolated_cluster else 0.0
-        ghost_contrib = max(0.0, (ghost_discrepancy - 1.8) * 4.0) if has_isolated_cluster else 0.0
+        # 1. Calibrated ELA contribution:
+        # Organic cameras: ELA <= 20 (contrib 0-5%)
+        # Moderate recompression: ELA 20-35 (contrib 5-32%)
+        # Severe compression anomaly / inpainting: ELA > 35 (contrib 32-75%)
+        if ela_score <= 20.0:
+            ela_contrib = max(0.0, (ela_score - 14.0) * 0.8)
+        elif ela_score <= 35.0:
+            ela_contrib = 5.0 + (ela_score - 20.0) * 1.8
+        else:
+            ela_contrib = 32.0 + (ela_score - 35.0) * 2.2
+
+        # 2. Diffusion / Generative AI Spectral penalty:
+        # High 2D-DFT lattice harmonics (>= 80) + elevated ELA (>= 35),
+        # or flat synthetic sensor noise (noise_std < 1.15):
+        diffusion_contrib = 0.0
+        is_generative_ai = (
+            (ela_score >= 35.0 and fft_energy >= 80.0) or
+            (sensor_noise_std < 1.15 and ela_score >= 30.0)
+        )
+        if is_generative_ai:
+            diffusion_contrib = 30.0
+
+        chrom_contrib = max(0.0, (chrom_diff - 25.0) * 0.50) if has_isolated_cluster else 0.0
+        noise_contrib = max(0.0, (noise_divergence - 70.0) * 0.35) if has_isolated_cluster else 0.0
+        ghost_contrib = max(0.0, (ghost_discrepancy - 1.5) * 4.5) if has_isolated_cluster else 0.0
         seam_contrib = 18.0 if (is_feathered and has_isolated_cluster) else 0.0
         software_contrib = 35.0 if provenance.get("is_edited_software_flag") else 0.0
         
         # Sensitivity modifier
         sens_multiplier = 1.15 if sensitivity == "aggressive" else (0.85 if sensitivity == "conservative" else 1.0)
         
-        raw_risk = (8.5 + ela_contrib + chrom_contrib + noise_contrib + ghost_contrib + seam_contrib + software_contrib) * sens_multiplier
+        raw_risk = (8.5 + ela_contrib + diffusion_contrib + chrom_contrib + noise_contrib + ghost_contrib + seam_contrib + software_contrib) * sens_multiplier
         
         if preset_hint == "whatsapp_dark":
             tamper_probability = 61.5
@@ -460,7 +488,8 @@ class ForensicAgent:
             box_color = (0, 0, 255)
         elif tamper_probability >= reject_threshold:
             verdict = "REJECT_SYNTHETIC_TAMPER"
-            action_taken = f"Auto-blocked refund ({tamper_probability}% Risk). Tampering detected in ROI {roi}; locked forensic bundle to AWS S3 & alerted Supervisor."
+            tamper_detail = "Generative AI diffusion lattice harmonics & ELA compression discrepancy" if is_generative_ai else "Tampering"
+            action_taken = f"Auto-blocked refund ({tamper_probability}% Risk). {tamper_detail} detected in ROI {roi}; locked forensic bundle to AWS S3 & alerted Supervisor."
             box_color = (0, 0, 255)
         elif tamper_probability >= review_threshold:
             verdict = "HUMAN_IN_THE_LOOP_REVIEW"

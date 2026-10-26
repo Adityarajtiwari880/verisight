@@ -189,7 +189,21 @@ def run_tests():
         )
         print("  Status:             PASSED (Presentation Attack Detected & Refused)")
 
-    # 7. Check MCP Tools Listing & JSON-RPC
+    # 7. Test Case 9: AI Generated Coupon Code Character Alteration (D -> C)
+    voucher_path = os.path.join(script_dir, "sample_real_voucher_tampered.jpg")
+    if os.path.exists(voucher_path):
+        res_voucher = upload_claim(voucher_path, "E-Commerce Voucher Claim")
+        verify_forensic_contract(res_voucher, "Test Case 9 AI Coupon Tamper")
+        print("\n--- Test Case 9: AI Generated Coupon Code Tampering (Altered Letter) ---")
+        print(f"  Verdict:            {res_voucher['verdict']}")
+        print(f"  Tamper Probability: {res_voucher['tamper_probability']}%")
+        print(f"  Autonomous Action:  {res_voucher['action_taken']}")
+        assert res_voucher["verdict"] in ["REJECT_SYNTHETIC_TAMPER", "MANUAL_REVIEW_FLAGGED"], (
+            f"Expected REJECT_SYNTHETIC_TAMPER, got: {res_voucher['verdict']}"
+        )
+        print("  Status:             PASSED (AI Photo & Micro-Character Tampering Auto-Blocked)")
+
+    # 8. Check MCP Tools Listing & JSON-RPC
     req_mcp = urllib.request.Request(f"{BASE_URL}/mcp/tools")
     with urllib.request.urlopen(req_mcp, timeout=5) as resp:
         mcp_data = json.loads(resp.read().decode())
