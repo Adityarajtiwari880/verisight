@@ -84,6 +84,14 @@ REAL_LIFE_SAMPLES = [
         "description": "Customer claims ₹1,200 voucher refund by using an AI photo with character alteration ('D' changed to 'C' in code C2333354E34A).",
         "file_name": "sample_real_voucher_tampered.jpg",
         "ground_truth": "TAMPERED_FRAUD"
+    },
+    {
+        "id": "real_voucher_genuine",
+        "title": "Genuine Benefit Coupon (Authentic Code D)",
+        "category": "E-Commerce Voucher Claim",
+        "description": "Customer claims ₹1,200 voucher refund with the original authentic coupon (Code D2333354E34A). Verified zero tampering.",
+        "file_name": "sample_real_voucher_genuine.jpg",
+        "ground_truth": "GENUINE_CLAIM"
     }
 ]
 
@@ -96,6 +104,7 @@ def build_preset_image(preset_id: str) -> tuple[np.ndarray, bytes]:
     bumper_path = os.path.join(BACKEND_DIR, "sample_real_car_bumper_dent.jpg")
     card_path = os.path.join(BACKEND_DIR, "test_car_card_crop.jpg")
     voucher_path = os.path.join(BACKEND_DIR, "sample_real_voucher_tampered.jpg")
+    voucher_genuine_path = os.path.join(BACKEND_DIR, "sample_real_voucher_genuine.jpg")
 
     def read_with_bytes(path):
         with open(path, "rb") as f:
@@ -116,6 +125,8 @@ def build_preset_image(preset_id: str) -> tuple[np.ndarray, bytes]:
         return read_with_bytes(card_path)
     elif preset_id == "real_voucher" and os.path.exists(voucher_path):
         return read_with_bytes(voucher_path)
+    elif preset_id == "real_voucher_genuine" and os.path.exists(voucher_genuine_path):
+        return read_with_bytes(voucher_genuine_path)
     elif preset_id == "whatsapp_dark":
         base_img = cv2.imread(genuine_path) if os.path.exists(genuine_path) else np.full((480, 640, 3), (140, 175, 205), dtype=np.uint8)
         dark = (base_img.astype(np.float32) * 0.28).astype(np.uint8)

@@ -1504,9 +1504,9 @@ export default function VeriSightDashboard() {
                     </span>
                   </div>
 
-                  {data.agent_trace?.map((step) => (
+                  {data.agent_trace?.map((step, idx) => (
                     <div
-                      key={step.step}
+                      key={`trace-${step.step}-${idx}`}
                       className="bg-slate-950/80 border border-slate-800/80 p-3 rounded-lg text-xs space-y-1.5 hover:border-slate-700 transition"
                     >
                       <div className="flex items-center justify-between">

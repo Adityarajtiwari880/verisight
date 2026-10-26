@@ -203,7 +203,24 @@ def run_tests():
         )
         print("  Status:             PASSED (AI Photo & Micro-Character Tampering Auto-Blocked)")
 
-    # 8. Check MCP Tools Listing & JSON-RPC
+    # 8. Test Case 10: Genuine Real Voucher Claim (Authentic Code D - Zero False Positive Test)
+    voucher_genuine_path = os.path.join(script_dir, "sample_real_voucher_genuine.jpg")
+    if os.path.exists(voucher_genuine_path):
+        res_vg = upload_claim(voucher_genuine_path, "E-Commerce Voucher Claim Genuine")
+        verify_forensic_contract(res_vg, "Test Case 10 Genuine Voucher")
+        print("\n--- Test Case 10: Genuine Benefit Coupon Screenshot (Authentic Code D) ---")
+        print(f"  Verdict:            {res_vg['verdict']}")
+        print(f"  Tamper Probability: {res_vg['tamper_probability']}%")
+        print(f"  Autonomous Action:  {res_vg['action_taken']}")
+        assert res_vg["verdict"] in ["AUTO_APPROVE_CLAIM", "MANUAL_REVIEW_FLAGGED"], (
+            f"Expected AUTO_APPROVE_CLAIM for genuine voucher, got: {res_vg['verdict']}"
+        )
+        assert res_vg["tamper_probability"] < 45.0, (
+            f"Expected tamper probability < 45%, got: {res_vg['tamper_probability']}%"
+        )
+        print("  Status:             PASSED (Zero False Positive on Authentic Coupon Screenshot)")
+
+    # 9. Check MCP Tools Listing & JSON-RPC
     req_mcp = urllib.request.Request(f"{BASE_URL}/mcp/tools")
     with urllib.request.urlopen(req_mcp, timeout=5) as resp:
         mcp_data = json.loads(resp.read().decode())

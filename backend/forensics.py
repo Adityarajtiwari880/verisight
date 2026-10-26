@@ -142,7 +142,11 @@ def tool_global_ela_scan(img: np.ndarray, quality: int = 90) -> Tuple[np.ndarray
     suspect_roi = [int(w * 0.25), int(h * 0.25), int(w * 0.5), int(h * 0.5)]
     total_frame_area = w * h
     min_area_thresh = total_frame_area * 0.001
-    best_score = -1.0
+    margin_x = int(w * 0.035)
+    margin_y = int(h * 0.035)
+    
+    interior_candidates = []
+    all_candidates = []
     
     for cnt in contours:
         area = cv2.contourArea(cnt)
@@ -160,15 +164,25 @@ def tool_global_ela_scan(img: np.ndarray, quality: int = 90) -> Tuple[np.ndarray
         # Anomaly density score: prioritizes intense localized inpainting patches over huge background blobs
         score = cnt_p95 * np.log10(area + 10.0)
         
-        if score > best_score:
-            best_score = score
-            pad_x = int(cw * 0.08)
-            pad_y = int(ch * 0.08)
-            rx = max(0, x - pad_x)
-            ry = max(0, y - pad_y)
-            rw = min(w - rx, cw + 2 * pad_x)
-            rh = min(h - ry, ch + 2 * pad_y)
-            suspect_roi = [rx, ry, rw, rh]
+        # Check if contour touches outer frame boundary (screenshot crop seam / window boundary)
+        is_border = (x <= margin_x) or (y <= margin_y) or (x + cw >= w - margin_x) or (y + ch >= h - margin_y)
+        cand = (score, x, y, cw, ch)
+        all_candidates.append(cand)
+        if not is_border:
+            interior_candidates.append(cand)
+            
+    # Prioritize genuine interior content anomalies over peripheral screenshot/crop frame borders
+    pool = interior_candidates if interior_candidates else all_candidates
+    if pool:
+        pool.sort(key=lambda item: item[0], reverse=True)
+        score, x, y, cw, ch = pool[0]
+        pad_x = int(cw * 0.08)
+        pad_y = int(ch * 0.08)
+        rx = max(0, x - pad_x)
+        ry = max(0, y - pad_y)
+        rw = min(w - rx, cw + 2 * pad_x)
+        rh = min(h - ry, ch + 2 * pad_y)
+        suspect_roi = [rx, ry, rw, rh]
             
     rx, ry, rw, rh = suspect_roi
     anomaly_score = float(np.percentile(compensated_ela[ry:ry+rh, rx:rx+rw], 95))
