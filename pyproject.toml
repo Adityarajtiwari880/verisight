@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "verisight"
+version = "2.2.0"
+authors = [
+  { name="Aditya Raj Tiwari", email="adityasantosh2026@gmail.com" },
+]
+description = "Sub-3ms Physical Multi-Spectral Image Forensics & Presentation Attack Detection engine powered by OpenCV 5 and Model Context Protocol (MCP)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+keywords = [
+    "computer-vision",
+    "image-forensics",
+    "opencv",
+    "mcp",
+    "model-context-protocol",
+    "generative-ai",
+    "deepfake-detection",
+    "presentation-attack-detection",
+    "tampering-detection"
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Image Processing",
+    "Topic :: Security :: Cryptography",
+]
+dependencies = [
+    "opencv-python-headless>=4.9.0",
+    "numpy>=1.24.0",
+    "pillow>=10.0.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.28.0",
+    "python-multipart>=0.0.9",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/Adityarajtiwari880/verisight"
+"Documentation" = "https://github.com/Adityarajtiwari880/verisight#readme"
+"Bug Tracker" = "https://github.com/Adityarajtiwari880/verisight/issues"
+"Source Code" = "https://github.com/Adityarajtiwari880/verisight"
+
+[project.scripts]
+verisight = "backend.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["backend*"]

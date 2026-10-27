@@ -18,6 +18,34 @@ In 2026, quick-commerce platforms (**Blinkit, Zepto, Instamart, Amazon Fresh**) 
 
 ---
 
+## 💻 2-Line Python SDK & Terminal CLI
+
+Install the core forensics engine and run instant audits directly from Python or the terminal:
+
+### Python SDK
+```python
+from backend import scan_image
+
+# 1-line multi-spectral forensic audit
+report = scan_image("path/to/claim_photo.jpg")
+print(f"Verdict: {report['verdict']} ({report['tamper_probability']}% Risk)")
+print(f"Suspect ROI: {report['roi']} | ELA Residual: {report['metrics']['ela_score']}")
+```
+
+### Terminal CLI
+```bash
+# Instant multi-spectral forensic audit
+python -m backend.cli scan path/to/voucher.jpg
+
+# Output machine-readable JSON telemetry
+python -m backend.cli scan path/to/invoice.jpg --json
+
+# Launch the MCP JSON-RPC + FastAPI Daemon
+python -m backend.cli server --port 8000
+```
+
+---
+
 ## 🎯 Target Award Alignments (100% Rubric Coverage)
 
 1. **Grand Prize ($5,000 Cash):** Highest overall score on the 100-point rubric across Technical Execution, Innovation, Real-World Impact, UX, and Cloud Delivery.

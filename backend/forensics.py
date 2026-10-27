@@ -636,7 +636,7 @@ def tool_recapture_pad_analysis(img_bgr: np.ndarray, claim_type: str = "") -> Di
     is_auto = any(k in c_lower for k in ["car", "vehicle", "bumper", "auto", "collision", "dent"])
     is_produce = any(k in c_lower for k in ["produce", "fruit", "strawberry", "strawberries", "grocery"])
     is_package = any(k in c_lower for k in ["package", "parcel", "delivery", "box", "carton"])
-    is_exempt = any(k in c_lower for k in ["invoice", "receipt", "tax", "bill", "calibration", "camera", "sensor"])
+    is_exempt = any(k in c_lower for k in ["invoice", "receipt", "tax", "bill", "voucher", "coupon", "document", "ticket", "calibration", "camera", "sensor"])
     
     # Invoices and delivery package cartons are exempt from printed card/box boundary checks
     if is_exempt or is_package:

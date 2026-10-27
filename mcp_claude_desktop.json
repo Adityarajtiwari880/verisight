@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "verisight": {
+      "command": "python",
+      "args": [
+        "-m",
+        "uvicorn",
+        "backend.main:app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8000"
+      ],
+      "env": {
+        "AWS_STORAGE_MODE": "LOCAL_PERSISTENT_SIMULATION",
+        "PYTHONPATH": "."
+      }
+    }
+  }
+}
