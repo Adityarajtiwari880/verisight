@@ -14,8 +14,8 @@ Thank you for your interest in contributing to **VeriSight MCP**! We welcome con
 
 ### 2. Clone the Repository
 ```bash
-git clone https://github.com/Adityarajtiwari880/verisigh.git
-cd verisigh
+git clone https://github.com/Adityarajtiwari880/verisight.git
+cd verisight
 ```
 
 ### 3. Backend Setup

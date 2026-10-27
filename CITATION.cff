@@ -7,7 +7,7 @@ authors:
 title: "VeriSight MCP: Autonomous Multi-Spectral Image Forensics and Presentation Attack Detection via OpenCV 5 and Model Context Protocol"
 version: 2.2.0
 date-released: 2026-10-27
-url: "https://github.com/Adityarajtiwari880/verisigh"
+url: "https://github.com/Adityarajtiwari880/verisight"
 license: "Apache-2.0"
 keywords:
   - computer-vision

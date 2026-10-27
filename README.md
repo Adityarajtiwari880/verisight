@@ -1,6 +1,6 @@
 # 🔬 VeriSight MCP — Autonomous Physical AI Forensics Engine
 
-[![VeriSight CI](https://github.com/Adityarajtiwari880/verisigh/actions/workflows/ci.yml/badge.svg)](https://github.com/Adityarajtiwari880/verisigh/actions)
+[![VeriSight CI](https://github.com/Adityarajtiwari880/verisight/actions/workflows/ci.yml/badge.svg)](https://github.com/Adityarajtiwari880/verisight/actions)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![OpenCV 5](https://img.shields.io/badge/OpenCV-5.0.0-5C3EE8?logo=opencv&logoColor=white)](https://opencv.org/)
 [![Model Context Protocol](https://img.shields.io/badge/MCP-Protocol%202024--11--05-10B981)](https://modelcontextprotocol.io/)
@@ -107,8 +107,8 @@ Executing 100 continuous perception-decision pipeline frames...
 ### Option A: Docker Compose (One-Click)
 Run the entire production stack (FastAPI Backend + Next.js UI) without local dependencies:
 ```bash
-git clone https://github.com/Adityarajtiwari880/verisigh.git
-cd verisigh
+git clone https://github.com/Adityarajtiwari880/verisight.git
+cd verisight
 docker compose up --build
 ```
 * **Web UI Dashboard:** [http://localhost:3000](http://localhost:3000)
@@ -121,8 +121,8 @@ docker compose up --build
 
 ```bash
 # 1. Clone Repository
-git clone https://github.com/Adityarajtiwari880/verisigh.git
-cd verisigh
+git clone https://github.com/Adityarajtiwari880/verisight.git
+cd verisight
 
 # 2. Start the FastAPI OpenCV 5 Backend (Terminal 1)
 cd backend
@@ -144,8 +144,8 @@ npm run dev
 ssh -i "your-key.pem" ubuntu@<YOUR-EC2-PUBLIC-IP>
 
 # 2. Clone repo and execute deployment script
-git clone https://github.com/Adityarajtiwari880/verisigh.git
-cd verisigh
+git clone https://github.com/Adityarajtiwari880/verisight.git
+cd verisight
 chmod +x deploy_graviton.sh
 ./deploy_graviton.sh
 
