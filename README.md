@@ -1,9 +1,10 @@
-# 🏆 VeriSight MCP — OpenCV 5 Autonomous Agentic Forensics Engine
-### *Winner-Grade Submission for OpenCV AI Competition 2026 (Powered by AWS)*
+# 🔬 VeriSight MCP — Autonomous Physical AI Forensics Engine
 
+[![VeriSight CI](https://github.com/Adityarajtiwari880/verisigh/actions/workflows/ci.yml/badge.svg)](https://github.com/Adityarajtiwari880/verisigh/actions)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![OpenCV 5](https://img.shields.io/badge/OpenCV-5.0.0-5C3EE8?logo=opencv&logoColor=white)](https://opencv.org/)
-[![AWS Graviton](https://img.shields.io/badge/AWS-Graviton%20Arm64%20(COOL)-FF9900?logo=amazon-aws&logoColor=white)](https://aws.amazon.com/ec2/graviton/)
 [![Model Context Protocol](https://img.shields.io/badge/MCP-Protocol%202024--11--05-10B981)](https://modelcontextprotocol.io/)
+[![AWS Graviton](https://img.shields.io/badge/AWS-Graviton%20Arm64%20(COOL)-FF9900?logo=amazon-aws&logoColor=white)](https://aws.amazon.com/ec2/graviton/)
 [![Next.js 16](https://img.shields.io/badge/Next.js-16.4.3-000000?logo=next.js&logoColor=white)](https://nextjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-Production%20Ready-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 
@@ -101,41 +102,61 @@ Executing 100 continuous perception-decision pipeline frames...
 
 ## 🚀 Step-by-Step Build & Run Guide
 
-### 1. Local Run (Windows / macOS / Linux)
+## 🚀 Quickstart & Deployment
 
-```powershell
-# Start the FastAPI OpenCV 5 Backend (Terminal 1)
+### Option A: Docker Compose (One-Click)
+Run the entire production stack (FastAPI Backend + Next.js UI) without local dependencies:
+```bash
+git clone https://github.com/Adityarajtiwari880/verisigh.git
+cd verisigh
+docker compose up --build
+```
+* **Web UI Dashboard:** [http://localhost:3000](http://localhost:3000)
+* **REST API & Swagger Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
+* **Model Context Protocol (MCP) Endpoint:** `http://localhost:8000/mcp/rpc`
+
+---
+
+### Option B: Local Development Run (Windows / macOS / Linux)
+
+```bash
+# 1. Clone Repository
+git clone https://github.com/Adityarajtiwari880/verisigh.git
+cd verisigh
+
+# 2. Start the FastAPI OpenCV 5 Backend (Terminal 1)
 cd backend
 python -m pip install -r requirements.txt
 python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 
-# Start the Next.js Frontend Dashboard (Terminal 2)
+# 3. Start the Next.js Frontend Dashboard (Terminal 2)
 cd ../frontend
 npm install
 npm run dev
-
-# Open in browser: http://localhost:3000
 ```
 
-### 2. AWS Graviton EC2 Deployment (Ubuntu 24.04 Arm64)
+---
+
+### Option C: AWS Graviton EC2 Deployment (Arm64 + COOL)
 
 ```bash
 # 1. SSH into AWS Graviton instance
 ssh -i "your-key.pem" ubuntu@<YOUR-EC2-PUBLIC-IP>
 
-# 2. Clone repo and execute one-click deploy script
-git clone https://github.com/adityarajtiwari/verisight-mcp.git
-cd verisight-mcp
+# 2. Clone repo and execute deployment script
+git clone https://github.com/Adityarajtiwari880/verisigh.git
+cd verisigh
 chmod +x deploy_graviton.sh
 ./deploy_graviton.sh
 
-# 3. Verify COOL status
+# 3. Verify hardware acceleration status
 curl http://127.0.0.1:8000/api/aws-status
 ```
 
 ---
 
-## 👥 Authors & Acknowledgments
+## 👥 Authors & License
 
-* **Aditya Raj Tiwari** — *Lead Architect & Computer Vision Engineer*
-* **OpenCV Foundation** & **Amazon Web Services (AWS)** for sponsoring the OpenCV AI Competition 2026.
+* **Aditya Raj Tiwari** — *Lead Architect & Computer Vision Engineer* ([GitHub](https://github.com/Adityarajtiwari880))
+* **License:** Licensed under the [Apache License, Version 2.0](LICENSE).
+* **OpenCV Foundation** & **Amazon Web Services (AWS)** for competition sponsorship & benchmarks.

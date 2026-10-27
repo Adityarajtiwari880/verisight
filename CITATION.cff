@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use VeriSight MCP in your research, computer vision benchmarking, or software, please cite it as below."
+authors:
+  - family-names: "Tiwari"
+    given-names: "Aditya Raj"
+    orcid: ""
+title: "VeriSight MCP: Autonomous Multi-Spectral Image Forensics and Presentation Attack Detection via OpenCV 5 and Model Context Protocol"
+version: 2.2.0
+date-released: 2026-10-27
+url: "https://github.com/Adityarajtiwari880/verisigh"
+license: "Apache-2.0"
+keywords:
+  - computer-vision
+  - image-forensics
+  - opencv-5
+  - model-context-protocol
+  - presentation-attack-detection
+  - synthetic-fraud
+  - diffusion-detection
