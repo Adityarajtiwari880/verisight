@@ -5,6 +5,7 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   backend-tests:
@@ -23,7 +24,7 @@ jobs:
       - name: Install System Dependencies (OpenCV)
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-glx libglib2.0-0
+          sudo apt-get install -y libgl1-mesa-glx libglib2.0-0 curl
 
       - name: Install Python Dependencies
         run: |
@@ -32,12 +33,16 @@ jobs:
 
       - name: Start FastAPI Background Daemon
         run: |
-          python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 &
-          sleep 3
+          PYTHONPATH=. python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 &
+          for i in {1..30}; do
+            curl -s http://127.0.0.1:8000/api/aws-status && break || true
+            echo "Waiting for FastAPI server to initialize..."
+            sleep 1
+          done
 
       - name: Run End-to-End Forensic Sanity Verification
         run: |
-          python backend/test_sanity.py
+          PYTHONPATH=. python backend/test_sanity.py
 
   frontend-build:
     name: Frontend Next.js Build & Lint
