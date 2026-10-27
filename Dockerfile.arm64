@@ -1,0 +1,44 @@
+# syntax=docker/dockerfile:1
+# VeriSight MCP - AWS Graviton Arm64 (aarch64) Production Container
+# Configured for Cloud-Optimized OpenCV Library (COOL) with KleidiCV NEON Acceleration
+
+FROM public.ecr.aws/ubuntu/ubuntu:24.04_stable
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+
+# Install base dependencies and AWS CLI tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-dev \
+    build-essential \
+    curl \
+    git \
+    libgl1 \
+    libglib2.0-0 \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set up COOL environment variables (Matches official AWS Marketplace AMI paths)
+ENV LD_LIBRARY_PATH="/opt/cool/cpp_sdk/lib:${LD_LIBRARY_PATH}"
+ENV PYTHONPATH="/opt/cool/python_3.12/site-packages/:${PYTHONPATH}"
+
+WORKDIR /app
+
+# Copy backend requirements and install Python dependencies
+COPY backend/requirements.txt /app/requirements.txt
+RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
+
+# Copy backend source code
+COPY backend/ /app/
+
+# Expose FastAPI backend port
+EXPOSE 8000
+
+# Health check to ensure forensics engine is alive
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:8000/api/aws-status || exit 1
+
+# Start the uvicorn server binding to all interfaces
+CMD ["python3", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
