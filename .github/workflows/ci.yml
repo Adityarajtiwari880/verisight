@@ -24,7 +24,7 @@ jobs:
       - name: Install System Dependencies (OpenCV)
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-glx libglib2.0-0 curl
+          sudo apt-get install -y libgl1 libglib2.0-0 curl
 
       - name: Install Python Dependencies
         run: |
@@ -61,7 +61,7 @@ jobs:
 
       - name: Install Frontend Dependencies
         working-directory: ./frontend
-        run: npm ci
+        run: npm install
 
       - name: Build Next.js Production App
         working-directory: ./frontend
