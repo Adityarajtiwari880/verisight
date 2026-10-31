@@ -220,13 +220,36 @@ def run_tests():
         )
         print("  Status:             PASSED (Zero False Positive on Authentic Coupon Screenshot)")
 
-    # 9. Check MCP Tools Listing & JSON-RPC
+    # 9. Check MCP Tools Listing & Quality Annotations
     req_mcp = urllib.request.Request(f"{BASE_URL}/mcp/tools")
     with urllib.request.urlopen(req_mcp, timeout=5) as resp:
         mcp_data = json.loads(resp.read().decode())
         tools = mcp_data.get("tools", [])
         print(f"\n[OK] Model Context Protocol (MCP) Server: {len(tools)} OpenCV 5 tools registered.")
-        assert len(tools) >= 6, f"Expected >= 6 MCP tools, got {len(tools)}"
+        assert len(tools) == 10, f"Expected 10 MCP tools, got {len(tools)}"
+        
+        expected_tool_names = [
+            "verisight_inspect_claim",
+            "verisight_active_clahe",
+            "verisight_sweep_jpeg_ghosts",
+            "verisight_azimuthal_fourier_probe",
+            "verisight_sensor_noise_prnu",
+            "verisight_perceptual_hash",
+            "verisight_micro_roi_seam_check",
+            "verisight_cloud_ledger_audit",
+            "verisight_recapture_pad_analysis",
+            "verisight_verify_vehicle_damage"
+        ]
+        registered_names = [t.get("name") for t in tools]
+        for name in expected_tool_names:
+            assert name in registered_names, f"Missing MCP tool in registry: {name}"
+            
+        for t in tools:
+            assert isinstance(t.get("readOnlyHint"), bool), f"Tool {t['name']} missing readOnlyHint"
+            assert isinstance(t.get("destructiveHint"), bool), f"Tool {t['name']} missing destructiveHint"
+            assert isinstance(t.get("idempotentHint"), bool), f"Tool {t['name']} missing idempotentHint"
+            assert isinstance(t.get("openWorldHint"), bool), f"Tool {t['name']} missing openWorldHint"
+        print(f"[OK] MCP Quality Verification: All 10 tools certified with readOnly/destructive/idempotent/openWorld hints.")
 
     # 7. Check COOL Benchmark Waterfall
     req_bench = urllib.request.Request(f"{BASE_URL}/api/benchmark-cool?iterations=15")

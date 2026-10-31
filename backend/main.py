@@ -42,6 +42,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+def root_status():
+    return {
+        "service": "VeriSight MCP - Autonomous Physical AI Forensics Engine",
+        "status": "ONLINE",
+        "version": "2.2.0",
+        "engine": "OpenCV 5.0.0 (ARM64 SIMD)",
+        "docs_url": "/docs",
+        "mcp_rpc_url": "/mcp/rpc"
+    }
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy", "service": "verisight-backend"}
+
 BACKEND_DIR = os.path.dirname(__file__)
 
 REAL_LIFE_SAMPLES = [
@@ -297,6 +312,49 @@ def mcp_agent_callback(tool_name: str, arguments: Dict[str, Any]) -> Any:
             "metrics": res["metrics"],
             "provenance": res.get("provenance", {})
         }
+    elif tool_name == "verisight_active_clahe":
+        from forensics import tool_active_clahe_remediation
+        preset = arguments.get("preset", "genuine")
+        img, _ = build_preset_image(preset)
+        clip_limit = float(arguments.get("clip_limit", 3.5))
+        tile_size = int(arguments.get("tile_grid_size", 8))
+        _, metrics = tool_active_clahe_remediation(img, clip_limit=clip_limit, tile_size=tile_size)
+        return {"status": "success", "tool": "verisight_active_clahe", "metrics": metrics}
+    elif tool_name == "verisight_sweep_jpeg_ghosts":
+        from forensics import tool_sweep_jpeg_ghosts
+        preset = arguments.get("preset", "real_strawberries")
+        img, _ = build_preset_image(preset)
+        roi = arguments.get("roi_bounding_box", [142, 92, 356, 316])
+        q_min = int(arguments.get("min_quality", 60))
+        q_max = int(arguments.get("max_quality", 96))
+        q_step = int(arguments.get("step", 4))
+        _, min_diff, best_q, metrics = tool_sweep_jpeg_ghosts(img, roi, (q_min, q_max, q_step))
+        return {"status": "success", "tool": "verisight_sweep_jpeg_ghosts", "min_diff": min_diff, "best_quality": best_q, "metrics": metrics}
+    elif tool_name == "verisight_azimuthal_fourier_probe":
+        from forensics import tool_roi_fourier_probe
+        preset = arguments.get("preset", "real_strawberries")
+        img, _ = build_preset_image(preset)
+        roi = arguments.get("roi_bounding_box", [142, 92, 356, 316])
+        _, dft_score, angle, metrics = tool_roi_fourier_probe(img, roi)
+        return {"status": "success", "tool": "verisight_azimuthal_fourier_probe", "dft_score": dft_score, "dominant_angle": angle, "metrics": metrics}
+    elif tool_name == "verisight_sensor_noise_prnu":
+        from forensics import tool_sensor_noise_probe
+        preset = arguments.get("preset", "genuine")
+        img, _ = build_preset_image(preset)
+        roi = arguments.get("roi_bounding_box", [100, 100, 200, 200])
+        _, noise_diff, ambient_var, metrics = tool_sensor_noise_probe(img, roi)
+        return {"status": "success", "tool": "verisight_sensor_noise_prnu", "noise_diff": noise_diff, "ambient_var": ambient_var, "metrics": metrics}
+    elif tool_name == "verisight_perceptual_hash":
+        from forensics import tool_perceptual_hash
+        preset = arguments.get("preset", "genuine")
+        img, _ = build_preset_image(preset)
+        return tool_perceptual_hash(img)
+    elif tool_name == "verisight_micro_roi_seam_check":
+        from forensics import tool_micro_roi_seam_inspection
+        preset = arguments.get("preset", "real_strawberries")
+        img, _ = build_preset_image(preset)
+        roi = arguments.get("roi_bounding_box", [142, 92, 356, 316])
+        return tool_micro_roi_seam_inspection(img, roi)
     elif tool_name == "verisight_cloud_ledger_audit":
         return aws_adapter.get_audit_history(limit=arguments.get("limit", 5))
     elif tool_name == "verisight_recapture_pad_analysis":

@@ -1,15 +1,26 @@
 """
 VeriSight MCP - Official Model Context Protocol (MCP) Tool Integration
 Exposes standard MCP tool definitions and JSON-RPC dispatchers, enabling LLMs
-(Claude, ChatGPT, Cursor, LangChain) to autonomously invoke OpenCV 5 forensic tools.
+(Claude Desktop, Cursor, ChatGPT, LangChain) to autonomously invoke OpenCV 5 forensic tools.
+Includes full quality annotations conforming to Anthropic MCP & OpenAI directory specifications.
 """
 
 from typing import Dict, Any, List
 
-MCP_TOOLS_MANIFEST = [
+MCP_TOOLS_MANIFEST: List[Dict[str, Any]] = [
     {
         "name": "verisight_inspect_claim",
         "description": "Orchestrates full multi-spectral OpenCV 5 forensic triage on a claim image (CLAHE, ELA, Fourier 2D DFT, PRNU noise, and Chrominance).",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": False,
+        "annotations": {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False
+        },
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -23,6 +34,16 @@ MCP_TOOLS_MANIFEST = [
     {
         "name": "verisight_active_clahe",
         "description": "Photometric active perception tool using OpenCV 5 cv2.createCLAHE in LAB color space to restore underexposed frames.",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": False,
+        "annotations": {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False
+        },
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -34,6 +55,16 @@ MCP_TOOLS_MANIFEST = [
     {
         "name": "verisight_sweep_jpeg_ghosts",
         "description": "Multi-Q JPEG Ghost Sweeper. Detects spliced inpainting patches resaved at different compression qualities.",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": False,
+        "annotations": {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False
+        },
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -46,6 +77,16 @@ MCP_TOOLS_MANIFEST = [
     {
         "name": "verisight_azimuthal_fourier_probe",
         "description": "Azimuthal 2D Fast Fourier Transform (cv2.dft) probe to detect periodic upsampling grids from generative diffusion models.",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": False,
+        "annotations": {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False
+        },
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -61,6 +102,16 @@ MCP_TOOLS_MANIFEST = [
     {
         "name": "verisight_sensor_noise_prnu",
         "description": "Extracts high-pass sensor noise residual (R = I - cv2.medianBlur(I, 3)) and detects local PRNU variance anomalies.",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": False,
+        "annotations": {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False
+        },
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -76,6 +127,16 @@ MCP_TOOLS_MANIFEST = [
     {
         "name": "verisight_perceptual_hash",
         "description": "Computes a 64-bit 2D-DCT frequency perceptual hash (pHash) and scans DynamoDB for duplicate photo reuse and Sybil refund rings.",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": False,
+        "annotations": {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False
+        },
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -86,6 +147,16 @@ MCP_TOOLS_MANIFEST = [
     {
         "name": "verisight_micro_roi_seam_check",
         "description": "Autonomous micro-investigation loop. Upscales suspect ROI 2x using Lanczos interpolation and measures boundary seam Laplacian discontinuity.",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": False,
+        "annotations": {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False
+        },
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -101,6 +172,16 @@ MCP_TOOLS_MANIFEST = [
     {
         "name": "verisight_cloud_ledger_audit",
         "description": "Queries the immutable AWS DynamoDB tamper ledger and retrieves S3 forensic evidence bundles.",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": True,
+        "annotations": {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": True
+        },
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -111,6 +192,16 @@ MCP_TOOLS_MANIFEST = [
     {
         "name": "verisight_recapture_pad_analysis",
         "description": "Evaluates Presentation Attack Detection (PAD) conforming to ISO/IEC 30107-3: planar card boundaries, printed typography strips, 2D-DFT halftone/Moiré spectral resonance, and diffuse print gamut.",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": False,
+        "annotations": {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False
+        },
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -121,6 +212,16 @@ MCP_TOOLS_MANIFEST = [
     {
         "name": "verisight_verify_vehicle_damage",
         "description": "Evaluates physical collision damage presence on vehicle panels: localized Laplacian curvature deformation, paint scratch contours, and impact concentration ratios.",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": False,
+        "annotations": {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False
+        },
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -147,7 +248,7 @@ def handle_json_rpc(payload: Dict[str, Any], agent_pipeline_callback) -> Dict[st
                 "protocol_version": "2024-11-05",
                 "server_info": {
                     "name": "verisight-mcp-engine",
-                    "version": "1.2.0",
+                    "version": "1.3.0",
                     "capabilities": {"tools": True, "resources": False, "prompts": False}
                 }
             }

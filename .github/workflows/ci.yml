@@ -43,6 +43,7 @@ jobs:
       - name: Run End-to-End Forensic Sanity Verification
         run: |
           PYTHONPATH=. python backend/test_sanity.py
+          PYTHONPATH=. python backend/test_mcp_tools.py
 
   frontend-build:
     name: Frontend Next.js Build & Lint
