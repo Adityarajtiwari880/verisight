@@ -31,16 +31,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt
 
-      - name: Start FastAPI Background Daemon
-        run: |
-          PYTHONPATH=. python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 &
-          for i in {1..30}; do
-            curl -s http://127.0.0.1:8000/api/aws-status && break || true
-            echo "Waiting for FastAPI server to initialize..."
-            sleep 1
-          done
-
-      - name: Run End-to-End Forensic Sanity Verification
+      - name: Run End-to-End Forensic Sanity & MCP Verification
         run: |
           PYTHONPATH=. python backend/test_sanity.py
           PYTHONPATH=. python backend/test_mcp_tools.py

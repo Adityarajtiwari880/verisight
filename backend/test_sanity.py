@@ -8,8 +8,51 @@ import uuid
 import json
 import os
 import sys
+import time
+import threading
+import urllib.parse
 
 BASE_URL = os.environ.get("VERISIGHT_API_URL", "http://127.0.0.1:8000")
+
+def ensure_server_running():
+    """Ensures backend is alive. If not running, automatically boots an in-process daemon."""
+    try:
+        req = urllib.request.Request(f"{BASE_URL}/api/aws-status")
+        with urllib.request.urlopen(req, timeout=1.5):
+            return
+    except Exception:
+        pass
+    
+    print("[*] Starting in-process FastAPI/Uvicorn server for automated tests...")
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    if current_dir not in sys.path:
+        sys.path.insert(0, current_dir)
+    parent_dir = os.path.dirname(current_dir)
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
+        
+    import uvicorn
+    from main import app
+    
+    parsed = urllib.parse.urlparse(BASE_URL)
+    host = parsed.hostname or "127.0.0.1"
+    port = parsed.port or 8000
+    
+    config = uvicorn.Config(app, host=host, port=port, log_level="warning")
+    server = uvicorn.Server(config)
+    t = threading.Thread(target=server.run, daemon=True)
+    t.start()
+    
+    for _ in range(25):
+        time.sleep(0.4)
+        try:
+            req = urllib.request.Request(f"{BASE_URL}/api/aws-status")
+            with urllib.request.urlopen(req, timeout=1.5):
+                print(f"[OK] In-process FastAPI server online and responsive on {BASE_URL}!")
+                return
+        except Exception:
+            pass
+    print("[!] Warning: In-process server did not respond within 10s.")
 
 def upload_claim(filepath: str, claim_type: str = "Automated Sanity Test"):
     boundary = uuid.uuid4().hex
@@ -57,6 +100,9 @@ def run_tests():
     print("  VeriSight MCP Forensic Pipeline - Automated Sanity Verification")
     print(f"  Target Backend: {BASE_URL}")
     print("=" * 60)
+
+    # 0. Ensure Backend Server is Running (Auto-Boot in CI if needed)
+    ensure_server_running()
 
     # 1. Test Health / Cloud Audit status
     try:
