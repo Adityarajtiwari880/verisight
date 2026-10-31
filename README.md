@@ -1,7 +1,7 @@
 # 🔬 VeriSight MCP — Autonomous Physical AI Visual Forensics Engine
 
 [![VeriSight CI](https://github.com/Adityarajtiwari880/verisight/actions/workflows/ci.yml/badge.svg)](https://github.com/Adityarajtiwari880/verisight/actions)
-[![M8ven Score](https://m8ven.ai/badge/mcp/adityarajtiwari880/verisight)](https://m8ven.ai/mcp/adityarajtiwari880/verisight?s=readme)
+[![M8ven Score](https://m8ven.ai/badge/mcp/adityarajtiwari880-verisight-11ohzr?v=5ddb567da1a0cb2e2f12567300d7ff24)](https://m8ven.ai/mcp/adityarajtiwari880-verisight-11ohzr?s=readme)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-3776AB?logo=python&logoColor=white)](pyproject.toml)
 [![OpenCV 5](https://img.shields.io/badge/OpenCV-5.0.0-5C3EE8?logo=opencv&logoColor=white)](https://opencv.org/)
