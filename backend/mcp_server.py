@@ -5,7 +5,7 @@ Exposes standard MCP tool definitions and JSON-RPC dispatchers, enabling LLMs
 Includes full quality annotations conforming to Anthropic MCP & OpenAI directory specifications.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 MCP_TOOLS_MANIFEST: List[Dict[str, Any]] = [
     {
@@ -231,15 +231,35 @@ MCP_TOOLS_MANIFEST: List[Dict[str, Any]] = [
     }
 ]
 
-def handle_json_rpc(payload: Dict[str, Any], agent_pipeline_callback) -> Dict[str, Any]:
+def handle_json_rpc(payload: Dict[str, Any], agent_pipeline_callback) -> Optional[Dict[str, Any]]:
     """
     Standard JSON-RPC 2.0 dispatcher for Model Context Protocol (MCP) clients.
+    Handles initialize handshake, tool discovery, and execution.
     """
     req_id = payload.get("id", 1)
     method = payload.get("method", "")
     params = payload.get("params", {})
     
-    if method in ["tools/list", "mcp/tools"]:
+    if method == "initialize":
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {
+                    "tools": {"listChanged": False}
+                },
+                "serverInfo": {
+                    "name": "verisight-mcp-engine",
+                    "version": "2.2.0"
+                }
+            }
+        }
+
+    elif method in ["notifications/initialized", "initialized"]:
+        return None  # Standard JSON-RPC 2.0 notification: no response required
+        
+    elif method in ["tools/list", "mcp/tools"]:
         return {
             "jsonrpc": "2.0",
             "id": req_id,
@@ -248,7 +268,7 @@ def handle_json_rpc(payload: Dict[str, Any], agent_pipeline_callback) -> Dict[st
                 "protocol_version": "2024-11-05",
                 "server_info": {
                     "name": "verisight-mcp-engine",
-                    "version": "1.3.0",
+                    "version": "2.2.0",
                     "capabilities": {"tools": True, "resources": False, "prompts": False}
                 }
             }
@@ -283,3 +303,34 @@ def handle_json_rpc(payload: Dict[str, Any], agent_pipeline_callback) -> Dict[st
                 "message": f"Method '{method}' not found."
             }
         }
+
+def run_stdio_server(agent_pipeline_callback=None):
+    """
+    Standard I/O (stdio) event loop for Model Context Protocol (MCP) clients
+    like Claude Desktop, Cursor, Windsurf, and Smithery.
+    """
+    import sys
+    import json
+    
+    if agent_pipeline_callback is None:
+        from main import mcp_agent_callback
+        agent_pipeline_callback = mcp_agent_callback
+
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            payload = json.loads(line)
+            response = handle_json_rpc(payload, agent_pipeline_callback)
+            if response is not None:
+                sys.stdout.write(json.dumps(response) + "\n")
+                sys.stdout.flush()
+        except Exception as e:
+            err_response = {
+                "jsonrpc": "2.0",
+                "id": None,
+                "error": {"code": -32700, "message": f"Parse error or exception: {str(e)}"}
+            }
+            sys.stdout.write(json.dumps(err_response) + "\n")
+            sys.stdout.flush()

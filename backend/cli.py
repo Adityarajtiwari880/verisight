@@ -67,9 +67,18 @@ def cmd_scan(args):
 
 def cmd_server(args):
     """Starts the VeriSight FastAPI + MCP JSON-RPC Daemon."""
+    if args.mcp:
+        from backend.mcp_server import run_stdio_server
+        run_stdio_server()
+        return
     import uvicorn
     print(f"Starting VeriSight MCP Server on {args.host}:{args.port}...")
     uvicorn.run("backend.main:app", host=args.host, port=args.port, reload=args.reload)
+
+def cmd_mcp(args):
+    """Runs standard I/O (stdio) MCP server for Claude Desktop, Cursor, and Smithery."""
+    from backend.mcp_server import run_stdio_server
+    run_stdio_server()
 
 def cmd_benchmark(args):
     """Runs the OpenCV 5 hardware acceleration benchmark."""
@@ -100,7 +109,12 @@ def main():
     server_parser.add_argument("--host", default="127.0.0.1", help="Host interface (default: 127.0.0.1)")
     server_parser.add_argument("--port", type=int, default=8000, help="Port (default: 8000)")
     server_parser.add_argument("--reload", action="store_true", help="Enable auto-reloader for dev")
+    server_parser.add_argument("--mcp", action="store_true", help="Start as stdio MCP server for Claude Desktop / Cursor")
     server_parser.set_defaults(func=cmd_server)
+
+    # Command: mcp
+    mcp_parser = subparsers.add_parser("mcp", help="Run standard I/O (stdio) MCP server for Claude Desktop, Cursor, and Smithery")
+    mcp_parser.set_defaults(func=cmd_mcp)
 
     # Command: benchmark
     bench_parser = subparsers.add_parser("benchmark", help="Run hardware SIMD latency benchmark")

@@ -113,30 +113,42 @@ verisight server --port 8000
 
 ## 🌐 Model Context Protocol (MCP) Integration
 
-VeriSight natively implements the **Anthropic Model Context Protocol (MCP)** specification (`protocol_version: 2024-11-05`). External LLM agents (**Claude Desktop**, **Cursor**, **Windsurf**, **LangChain**) can discover and call VeriSight tools autonomously.
+VeriSight natively implements the **Anthropic Model Context Protocol (MCP)** specification (`protocol_version: 2024-11-05`). External LLM agents (**Claude Desktop**, **Cursor**, **Windsurf**, **LangChain**) can discover and call VeriSight tools autonomously via high-performance standard I/O (`stdio`).
+
+### 1-Click Install via Smithery
+```bash
+npx -y @smithery/cli install verisight --client claude
+```
 
 ### Claude Desktop & Cursor Configuration
 
-Add VeriSight to your `claude_desktop_config.json` (or Cursor MCP settings):
+Add VeriSight directly to your `claude_desktop_config.json` (or Cursor MCP settings):
 
 ```json
 {
   "mcpServers": {
     "verisight": {
       "command": "python",
-      "args": ["-m", "backend.cli", "server", "--mcp"]
+      "args": ["-m", "backend.cli", "mcp"],
+      "env": {
+        "PYTHONPATH": "."
+      }
     }
   }
 }
 ```
 
-### Available MCP Tools:
-* `verisight_inspect_claim`: End-to-end multi-spectral forensic triage on an image.
-* `verisight_active_clahe`: Dynamic CIE LAB contrast enhancement.
-* `verisight_sweep_jpeg_ghosts`: Multi-Q JPEG quantization discrepancy sweeper.
-* `verisight_azimuthal_fourier_probe`: 2D DFT frequency-domain harmonic analysis.
-* `verisight_sensor_noise_prnu`: High-pass CMOS sensor noise extraction and variance check.
-* `verisight_cloud_ledger_audit`: Immutable audit trail retrieval from DynamoDB and S3 evidence vaults.
+### Registered MCP Forensic Tools (10/10 Certified):
+* `verisight_inspect_claim`: Orchestrates full multi-spectral OpenCV 5 forensic triage on a claim image.
+* `verisight_active_clahe`: Photometric active perception using CLAHE in LAB color space.
+* `verisight_sweep_jpeg_ghosts`: Multi-Q JPEG ghost sweeper to detect spliced inpainting patches.
+* `verisight_azimuthal_fourier_probe`: 2D DFT frequency-domain harmonic analysis for generative diffusion grids.
+* `verisight_sensor_noise_prnu`: High-pass CMOS sensor noise extraction and local PRNU variance check.
+* `verisight_perceptual_hash`: 64-bit 2D-DCT perceptual hash (pHash) Sybil ring & duplicate photo detector.
+* `verisight_micro_roi_seam_check`: Autonomous micro-investigation loop checking boundary seam Laplacian discontinuity.
+* `verisight_cloud_ledger_audit`: Queries immutable DynamoDB tamper ledger and retrieves S3 evidence bundles.
+* `verisight_recapture_pad_analysis`: ISO/IEC 30107-3 compliant Presentation Attack Detection (PAD) blocking printed cards & screen recaptures.
+* `verisight_verify_vehicle_damage`: Physical collision damage verification (localized Laplacian curvature deformation & impact ratios).
 
 ---
 

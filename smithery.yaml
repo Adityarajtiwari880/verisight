@@ -1,0 +1,11 @@
+# Smithery configuration for VeriSight MCP
+# https://smithery.ai/docs/config
+
+startCommand:
+  type: stdio
+  config:
+    command: python
+    args:
+      - "-m"
+      - "backend.cli"
+      - "mcp"
