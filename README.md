@@ -115,15 +115,28 @@ verisight server --port 8000
 
 VeriSight natively implements the **Anthropic Model Context Protocol (MCP)** specification (`protocol_version: 2024-11-05`). External LLM agents (**Claude Desktop**, **Cursor**, **Windsurf**, **LangChain**) can discover and call VeriSight tools autonomously via high-performance standard I/O (`stdio`).
 
-### 1-Click Install via Smithery
+### 1-Click Zero-Install (`uvx`)
+Run directly via Astral `uvx` with zero manual cloning or environment setup:
 ```bash
-npx -y @smithery/cli install verisight --client claude
+uvx verisight mcp
 ```
 
 ### Claude Desktop & Cursor Configuration
 
 Add VeriSight directly to your `claude_desktop_config.json` (or Cursor MCP settings):
 
+```json
+{
+  "mcpServers": {
+    "verisight": {
+      "command": "uvx",
+      "args": ["verisight", "mcp"]
+    }
+  }
+}
+```
+
+*(For running from local source cloned repository)*:
 ```json
 {
   "mcpServers": {

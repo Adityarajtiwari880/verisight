@@ -11,7 +11,8 @@ authors = [
 description = "Sub-3ms Physical Multi-Spectral Image Forensics & Presentation Attack Detection engine powered by OpenCV 5 and Model Context Protocol (MCP)."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 keywords = [
     "computer-vision",
     "image-forensics",
@@ -28,18 +29,21 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Topic :: Scientific/Engineering :: Image Processing",
     "Topic :: Security :: Cryptography",
 ]
 dependencies = [
-    "opencv-python-headless>=4.9.0",
+    "opencv-python-headless>=4.8.0",
     "numpy>=1.24.0",
     "pillow>=10.0.0",
     "fastapi>=0.110.0",
     "uvicorn>=0.28.0",
     "python-multipart>=0.0.9",
+    "python-dotenv>=1.0.0",
+    "boto3>=1.35.0",
+    "pydantic>=2.9.0",
+    "requests>=2.32.0",
 ]
 
 [project.urls]

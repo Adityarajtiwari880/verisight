@@ -50,12 +50,60 @@ def root_status():
         "version": "2.2.0",
         "engine": "OpenCV 5.0.0 (ARM64 SIMD)",
         "docs_url": "/docs",
+        "api_url": "/api",
         "mcp_rpc_url": "/mcp/rpc"
     }
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "service": "verisight-backend"}
+    return {"status": "healthy", "service": "verisight-backend", "version": "2.2.0"}
+
+@app.get("/api")
+@app.get("/api/")
+def api_index():
+    return {
+        "service": "VeriSight MCP REST API",
+        "status": "ONLINE",
+        "version": "2.2.0",
+        "documentation": "/docs",
+        "endpoints": {
+            "health": "/health",
+            "aws_status": "/api/aws-status",
+            "enterprise_queue": "/api/enterprise-queue",
+            "real_life_samples": "/api/real-life-samples",
+            "analyze_claim": "/api/analyze-claim (POST)",
+            "demo_preset": "/api/demo-preset/{preset_id} (POST)",
+            "mcp_tools": "/mcp/tools",
+            "mcp_execute": "/mcp/execute (POST)",
+            "mcp_rpc": "/mcp/rpc (POST)"
+        }
+    }
+
+@app.get("/mcp")
+@app.get("/mcp/")
+def mcp_index():
+    return {
+        "protocol": "Model Context Protocol (MCP)",
+        "protocol_version": "2024-11-05",
+        "tools_manifest": "/mcp/tools",
+        "json_rpc_endpoint": "/mcp/rpc",
+        "direct_execute": "/mcp/execute",
+        "stdio_command": "uvx verisight mcp"
+    }
+
+@app.exception_handler(404)
+async def custom_404_handler(request, exc):
+    return JSONResponse(
+        status_code=404,
+        content={
+            "error": "Endpoint not found",
+            "requested_url": str(request.url),
+            "documentation": "/docs",
+            "api_root": "/api",
+            "service_status": "/health",
+            "mcp_manifest": "/mcp/tools"
+        }
+    )
 
 BACKEND_DIR = os.path.dirname(__file__)
 
