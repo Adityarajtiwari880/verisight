@@ -251,7 +251,7 @@ def handle_json_rpc(payload: Dict[str, Any], agent_pipeline_callback) -> Optiona
                 },
                 "serverInfo": {
                     "name": "verisight-mcp-engine",
-                    "version": "2.2.0"
+                    "version": "2.2.1"
                 }
             }
         }
@@ -268,7 +268,7 @@ def handle_json_rpc(payload: Dict[str, Any], agent_pipeline_callback) -> Optiona
                 "protocol_version": "2024-11-05",
                 "server_info": {
                     "name": "verisight-mcp-engine",
-                    "version": "2.2.0",
+                    "version": "2.2.1",
                     "capabilities": {"tools": True, "resources": False, "prompts": False}
                 }
             }

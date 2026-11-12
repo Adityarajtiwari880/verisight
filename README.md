@@ -356,3 +356,5 @@ If you use VeriSight in your research, production systems, or publications, plea
 ## 📜 License
 
 Licensed under the **[Apache License, Version 2.0](LICENSE)**. You may freely use, modify, and distribute this software for commercial and private purposes according to the license terms.
+
+<!-- mcp-name: io.github.Adityarajtiwari880/verisight -->
