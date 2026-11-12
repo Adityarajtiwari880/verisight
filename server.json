@@ -2,18 +2,18 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.Adityarajtiwari880/verisight",
   "title": "VeriSight MCP",
-  "description": "Sub-3ms OpenCV 5 visual forensics & AI inpainting fraud detection MCP server.",
+  "description": "Sub-3ms OpenCV 5 image forensics, deepfake, AI inpainting & tamper fraud detection MCP.",
   "websiteUrl": "https://github.com/Adityarajtiwari880/verisight",
   "repository": {
     "url": "https://github.com/Adityarajtiwari880/verisight",
     "source": "github"
   },
-  "version": "2.2.1",
+  "version": "2.2.2",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "verisight",
-      "version": "2.2.1",
+      "version": "2.2.2",
       "runtimeHint": "uvx",
       "packageArguments": [
         {
