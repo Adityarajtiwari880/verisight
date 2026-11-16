@@ -30,7 +30,7 @@ from forensics import (
     tool_perceptual_hash
 )
 
-__version__ = "2.2.2"
+__version__ = "2.2.3"
 __author__ = "Aditya Raj Tiwari"
 __license__ = "Apache-2.0"
 

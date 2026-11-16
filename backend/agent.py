@@ -38,7 +38,7 @@ class ForensicAgent:
     JPEG Ghost Sweeper, and PRNU Sensor Noise.
     """
     def __init__(self):
-        self.version = "2.2.2"
+        self.version = "2.2.3"
 
     def run_investigation(
         self,
@@ -443,51 +443,73 @@ class ForensicAgent:
         is_full_frame = (rw > 0.65 * working_dim[0] and rh > 0.65 * working_dim[1])
         has_isolated_cluster = not is_full_frame and (clusters_detected > 0) and (ela_score > 25.0)
 
-        # Generative AI detection:
-        # Detects diffusion micro-fringing, synthetic sensor voids, or lattice harmonics
-        is_generative_ai = (
-            (cr_sobel_std >= 6.0 and ela_score >= 35.0) or
-            (sensor_noise_std < 1.15 and ela_score >= 30.0) or
-            (harmonic_ratio >= 2.8 and fft_energy >= 85.0 and ela_score >= 38.0)
+        # Natural Camera vs Document / Synthetic Domain Differentiation:
+        # In natural camera photos (damaged items, vehicles, nature, people), natural optical color transitions
+        # produce high whole-frame chrominance variance that must not be confused with generative AI fringing.
+        # In documents/vouchers, paper is predominantly monochrome/duotone so character editing creates high chrominance spikes.
+        is_doc_or_voucher = scene_triage.get("has_document_structure", False) or any(
+            k in claim_type.lower() for k in ["voucher", "coupon", "bill", "invoice", "receipt", "document", "text"]
         )
 
-        # Multi-modal concordance: Requires corroboration from multiple orthogonal forensic probes
-        has_corroboration = (
-            is_feathered or
-            (ghost_discrepancy >= 0.8) or
-            (noise_divergence >= 45.0 and ela_score >= 25.0) or
-            (ela_score >= 68.0) or
-            is_generative_ai or
-            provenance.get("is_edited_software_flag", False)
-        )
+        # Generative AI detection & Corroboration:
+        if is_doc_or_voucher:
+            is_generative_ai = (
+                (cr_sobel_std >= 6.0 and ela_score >= 35.0 and has_isolated_cluster) or
+                (sensor_noise_std < 1.15 and ela_score >= 30.0) or
+                (harmonic_ratio >= 2.8 and fft_energy >= 85.0 and ela_score >= 38.0) or
+                (ghost_discrepancy >= 0.82 and noise_divergence >= 35.0 and has_isolated_cluster) or
+                (is_feathered and has_isolated_cluster)
+            )
+            has_corroboration = (
+                is_feathered or
+                (ghost_discrepancy >= 0.8) or
+                (noise_divergence >= 45.0 and ela_score >= 25.0) or
+                (ela_score >= 68.0) or
+                is_generative_ai or
+                provenance.get("is_edited_software_flag", False)
+            )
+        else:
+            is_generative_ai = (
+                (has_isolated_cluster and is_feathered and ela_score >= 35.0) or
+                (has_isolated_cluster and sensor_noise_std < 1.15 and noise_divergence >= 35.0 and ela_score >= 30.0) or
+                (harmonic_ratio >= 2.8 and fft_energy >= 85.0 and is_feathered) or
+                (has_isolated_cluster and is_feathered and (ghost_discrepancy >= 0.82 or noise_divergence >= 40.0))
+            )
+            has_corroboration = (
+                is_feathered or
+                (ghost_discrepancy >= 0.82 and has_isolated_cluster and is_feathered) or
+                (noise_divergence >= 45.0 and ela_score >= 35.0 and has_isolated_cluster and is_feathered) or
+                is_generative_ai or
+                provenance.get("is_edited_software_flag", False)
+            )
 
         # 1. Calibrated ELA contribution:
         # Organic cameras: ELA <= 20 (contrib 0-5%)
-        # Moderate recompression: ELA 20-35 (contrib 5-32%)
-        # Corroborated inpainting: ELA > 35 (contrib 32-75%)
-        # Uncorroborated document text/graphics: capped at 18% to avoid false positives
+        # Moderate recompression: ELA 20-35 (contrib 5-27%)
+        # Corroborated inpainting: ELA > 35 (contrib 28-75%)
+        # Uncorroborated natural optical edges / texture: capped safely at 16%
         if ela_score <= 20.0:
             ela_contrib = max(0.0, (ela_score - 14.0) * 0.8)
         elif ela_score <= 35.0:
-            ela_contrib = 5.0 + (ela_score - 20.0) * 1.8
+            ela_contrib = 5.0 + (ela_score - 20.0) * 1.5
         else:
-            if has_corroboration:
-                ela_contrib = 32.0 + (ela_score - 35.0) * 2.2
+            if has_corroboration and has_isolated_cluster:
+                ela_contrib = 28.0 + (ela_score - 35.0) * 1.8
             else:
-                ela_contrib = min(18.0, 5.0 + (ela_score - 20.0) * 0.50)
+                ela_contrib = min(16.0, 5.0 + (ela_score - 20.0) * 0.35)
 
         # 2. Diffusion / Generative AI Spectral penalty:
         diffusion_contrib = 30.0 if is_generative_ai else 0.0
 
         # 3. Chrominance & Multi-probe contributions:
-        if has_corroboration:
-            chrom_contrib = min(40.0, max(0.0, (chrom_diff - 25.0) * 0.45)) if has_isolated_cluster else 0.0
+        if has_corroboration and has_isolated_cluster:
+            chrom_contrib = min(35.0, max(0.0, (chrom_diff - 25.0) * 0.45))
         else:
-            chrom_contrib = min(6.0, max(0.0, (chrom_diff - 25.0) * 0.10)) if has_isolated_cluster else 0.0
+            chrom_contrib = min(5.0, max(0.0, (chrom_diff - 25.0) * 0.08)) if has_isolated_cluster else 0.0
 
         noise_contrib = max(0.0, (noise_divergence - 70.0) * 0.35) if (has_isolated_cluster and has_corroboration) else 0.0
         ghost_contrib = max(0.0, (ghost_discrepancy - 0.8) * 6.0) if (has_isolated_cluster and has_corroboration) else 0.0
-        seam_contrib = 22.0 if (is_feathered and has_isolated_cluster) else 0.0
+        seam_contrib = 25.0 if (is_feathered and has_isolated_cluster) else 0.0
         software_contrib = 35.0 if provenance.get("is_edited_software_flag") else 0.0
         
         # Sensitivity modifier

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "verisight"
-version = "2.2.2"
+version = "2.2.3"
 authors = [
   { name="Aditya Raj Tiwari", email="adityasantosh2026@gmail.com" },
 ]
