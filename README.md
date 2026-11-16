@@ -2,6 +2,7 @@
 
 [![VeriSight CI](https://github.com/Adityarajtiwari880/verisight/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Adityarajtiwari880/verisight/actions/workflows/ci.yml)
 [![PyPI version](https://img.shields.io/pypi/v/verisight.svg?color=blue)](https://pypi.org/project/verisight/)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Adityarajtiwari880/verisight/blob/main/benchmarks/verisight_forensic_benchmark.ipynb)
 [![mcprush score](https://mcprush.com/badge/verisight-mcp/score.svg)](https://mcprush.com/to/verisight-mcp?ref=badge)
 [![M8ven Score](https://m8ven.ai/badge/mcp/adityarajtiwari880-verisight-11ohzr?v=5ddb567da1a0cb2e2f12567300d7ff24)](https://m8ven.ai/mcp/adityarajtiwari880-verisight-11ohzr?s=readme)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
@@ -256,6 +257,19 @@ Executing 100 continuous perception-decision pipeline frames...
 
 ---
 
+### 🧪 1-Click Cloud Benchmark Suite (Zero Local Disk Space)
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Adityarajtiwari880/verisight/blob/main/benchmarks/verisight_forensic_benchmark.ipynb)
+
+Evaluate VeriSight against real-world camera photographs, spliced manipulations, and generative AI inpaintings directly in the cloud with **0 KB local disk usage**:
+
+* **Interactive Notebook:** [`benchmarks/verisight_forensic_benchmark.ipynb`](benchmarks/verisight_forensic_benchmark.ipynb)
+* **Headless Evaluation Script:** [`benchmarks/run_colab_benchmark.py`](benchmarks/run_colab_benchmark.py)
+* **Streaming Architecture:** Images are fetched in-memory (`RAM-only`) from standard vision corpuses (COCO, Open Images, OpenCV test suites) and evaluated on-the-fly without saving any image files to disk.
+* **Metrics Generated:** Confusion Matrix, Precision, Recall, Specificity, F1-Score, Processing Latency, and ROC Curve.
+
+---
+
 ## 📁 Repository Structure
 
 ```
@@ -264,6 +278,9 @@ verisight/
 │   ├── workflows/ci.yml         # Automated Python 3.11 & Next.js CI
 │   ├── ISSUE_TEMPLATE/          # Bug reports & feature requests
 │   └── PULL_REQUEST_TEMPLATE.md # Contributor review standards
+├── benchmarks/                  # 1-Click cloud benchmark suite (Colab / RAM streaming)
+│   ├── run_colab_benchmark.py   # Headless streaming evaluator
+│   └── verisight_forensic_benchmark.ipynb # Interactive notebook with confusion heatmaps
 ├── backend/
 │   ├── __init__.py              # Python SDK exports (scan_image, verify_claim)
 │   ├── cli.py                   # Terminal CLI entry point (verisight command)
