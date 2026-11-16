@@ -1,6 +1,7 @@
 # 🔬 VeriSight MCP — Autonomous Physical AI Visual Forensics Engine
 
 [![VeriSight CI](https://github.com/Adityarajtiwari880/verisight/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Adityarajtiwari880/verisight/actions/workflows/ci.yml)
+[![mcprush score](https://mcprush.com/badge/verisight-mcp/score.svg)](https://mcprush.com/to/verisight-mcp?ref=badge)
 [![M8ven Score](https://m8ven.ai/badge/mcp/adityarajtiwari880-verisight-11ohzr?v=5ddb567da1a0cb2e2f12567300d7ff24)](https://m8ven.ai/mcp/adityarajtiwari880-verisight-11ohzr?s=readme)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-3776AB?logo=python&logoColor=white)](pyproject.toml)
@@ -132,10 +133,15 @@ verisight server --port 8000
 
 VeriSight natively implements the **Anthropic Model Context Protocol (MCP)** specification (`protocol_version: 2024-11-05`). External LLM agents (**Claude Desktop**, **Cursor**, **Windsurf**, **LangChain**) can discover and call VeriSight tools autonomously via high-performance standard I/O (`stdio`).
 
-### 1-Click Zero-Install (`uvx`)
+### 1-Click Zero-Install (`uvx` & `claude mcp`)
 Run directly via Astral `uvx` with zero manual cloning or environment setup:
 ```bash
 uvx verisight mcp
+```
+
+Or add directly to **Claude Code CLI**:
+```bash
+claude mcp add --scope user verisight-mcp '--' uvx verisight mcp
 ```
 
 ### Claude Desktop & Cursor Configuration
