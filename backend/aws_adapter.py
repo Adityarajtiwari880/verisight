@@ -5,6 +5,7 @@ Safe for public repositories: zero hardcoded credentials, reads purely from envi
 """
 
 import os
+import re
 import json
 import time
 import hashlib
@@ -107,8 +108,16 @@ class AWSCloudAdapter:
             except Exception:
                 pass
                 
-        # Virtual local S3 storage
-        local_path = os.path.join(S3_VAULT_DIR, f"{claim_id}.json")
+        # Virtual local S3 storage with strict path traversal protection (CWE-22 / CWE-23)
+        safe_claim_id = os.path.basename(str(claim_id))
+        safe_claim_id = re.sub(r"[^a-zA-Z0-9_\-]", "", safe_claim_id) or "default_claim"
+        vault_dir_abs = os.path.abspath(S3_VAULT_DIR)
+        local_path = os.path.abspath(os.path.join(vault_dir_abs, f"{safe_claim_id}.json"))
+
+        # Strict boundary check to prevent directory escape
+        if not local_path.startswith(vault_dir_abs):
+            raise ValueError(f"Path traversal detected in claim_id: {claim_id}")
+
         with open(local_path, "wb") as f:
             f.write(payload_bytes)
             
