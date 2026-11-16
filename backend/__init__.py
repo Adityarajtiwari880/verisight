@@ -7,7 +7,20 @@ License: Apache-2.0
 
 import os
 import sys
+import glob
 from pathlib import Path
+
+# Auto-discover and attach virtual environment site-packages if running inside Docker/uv/container
+for _venv_candidate in [
+    "/app/.venv",
+    os.path.join(os.getcwd(), ".venv"),
+    str(Path(__file__).resolve().parent.parent / ".venv")
+]:
+    if os.path.isdir(_venv_candidate):
+        for _sp in glob.glob(os.path.join(_venv_candidate, "lib", "python*", "site-packages")):
+            if _sp not in sys.path:
+                sys.path.insert(0, _sp)
+
 from typing import Dict, Any, Union
 import numpy as np
 import cv2

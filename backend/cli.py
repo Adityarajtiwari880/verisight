@@ -5,9 +5,21 @@ Provides instant terminal forensics, MCP server daemon, and hardware benchmarks.
 
 import sys
 import os
+import glob
 import argparse
 import json
 from pathlib import Path
+
+# Auto-discover and attach virtual environment site-packages if running inside Docker/uv/container
+for _venv_candidate in [
+    "/app/.venv",
+    os.path.join(os.getcwd(), ".venv"),
+    str(Path(__file__).resolve().parent.parent / ".venv")
+]:
+    if os.path.isdir(_venv_candidate):
+        for _sp in glob.glob(os.path.join(_venv_candidate, "lib", "python*", "site-packages")):
+            if _sp not in sys.path:
+                sys.path.insert(0, _sp)
 
 # Add backend directory to path
 _current_dir = str(Path(__file__).resolve().parent)
