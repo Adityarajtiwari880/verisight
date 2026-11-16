@@ -42,6 +42,8 @@ jobs:
 
       - name: Publish Package to PyPI (Trusted Publishing)
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

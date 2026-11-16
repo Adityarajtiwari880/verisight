@@ -38,7 +38,7 @@ class ForensicAgent:
     JPEG Ghost Sweeper, and PRNU Sensor Noise.
     """
     def __init__(self):
-        self.version = "2.2.5"
+        self.version = "2.2.6"
 
     def run_investigation(
         self,

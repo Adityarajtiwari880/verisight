@@ -1,6 +1,6 @@
 """
 VeriSight MCP — Authoritative Empirical Forensic Benchmark Suite
-Evaluates VeriSight v2.2.5 across real-world camera photographs and authentic forensic claims:
+Evaluates VeriSight v2.2.6 across real-world camera photographs and authentic forensic claims:
 - COCO val2017 & OpenCV organic high-dynamic camera captures (Authentic Ground-Truth)
 - Real-world AI inpainting, fabricated collision impact, tax invoice alteration,
   and generative diffusion tampering (Fraud Ground-Truth).
@@ -234,7 +234,7 @@ def run_benchmark(max_samples: int = 30, output_dir: str = "benchmark_output"):
 
     # Save summary report
     summary = {
-        "verisight_version": "2.2.5",
+        "verisight_version": "2.2.6",
         "total_samples": total,
         "true_positives": tp,
         "true_negatives": tn,

@@ -1,5 +1,11 @@
 # VeriSight MCP Changelog
 
+## [2.2.6] - 2026-11-16
+
+### 📦 Dual-Namespace Architecture & CI Robustness
+- **Unified Dual-Namespace Imports**: Added root `verisight` package alongside `backend`, ensuring `from backend.agent import forensic_agent`, `from verisight.backend.agent import forensic_agent`, and `from verisight import forensic_agent` all resolve transparently without namespace conflicts.
+- **CI / CD Automated GitHub Releases**: Enhanced release workflow to automatically create formal GitHub Releases and publish artifacts to GitHub and the official MCP Registry.
+
 ## [2.2.5] - 2026-11-16
 
 ### 🔬 100.0% Empirical Forensic Benchmark Milestone
