@@ -8,12 +8,12 @@
     "url": "https://github.com/Adityarajtiwari880/verisight",
     "source": "github"
   },
-  "version": "2.2.4",
+  "version": "2.2.5",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "verisight",
-      "version": "2.2.4",
+      "version": "2.2.5",
       "runtimeHint": "uvx",
       "packageArguments": [
         {

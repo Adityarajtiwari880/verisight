@@ -48,6 +48,7 @@ backend/local_storage/dynamodb_ledger.json
 
 # Operating System & IDEs
 .DS_Store
+scratch/
 Thumbs.db
 .vscode/
 .idea/

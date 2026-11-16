@@ -38,7 +38,7 @@ class ForensicAgent:
     JPEG Ghost Sweeper, and PRNU Sensor Noise.
     """
     def __init__(self):
-        self.version = "2.2.4"
+        self.version = "2.2.5"
 
     def run_investigation(
         self,
@@ -478,14 +478,37 @@ class ForensicAgent:
                 (ghost_discrepancy >= 1.60 and chrom_diff >= 45.0)
             )
             pillar_ghost = (has_ghost_mismatch and ela_score >= 30.0 and has_isolated_cluster)
-            pillar_noise = (noise_divergence >= 50.0 and (has_ghost_mismatch or is_feathered or sensor_noise_std < 1.15) and has_isolated_cluster)
+            
+            # Seam boundary feathering requires concurrence with compression or noise divergence
+            # (prevents high-contrast organic edges with 0 ghost from falsely triggering)
+            pillar_seam = (
+                is_feathered and 
+                (has_ghost_mismatch or ghost_discrepancy >= 0.70 or noise_divergence >= 60.0 or sensor_noise_std < 1.15) and 
+                has_isolated_cluster
+            )
+            
+            # Sensor noise divergence: requires corroborating physical void, ghost mismatch, or seam
+            pillar_noise = (
+                noise_divergence >= 50.0 and 
+                (has_ghost_mismatch or (is_feathered and ghost_discrepancy >= 0.70) or sensor_noise_std < 1.15) and 
+                has_isolated_cluster
+            )
+            
+            # High-noise inpainting concurrence (e.g. broken phone screens, spliced textures):
+            # Strong noise divergence (>= 80%) corroborated by elevated ghost discrepancy (>= 1.20)
+            # and significant chrominance shift (>= 18.0%) on isolated physical regions
             pillar_ghost_noise = (
-                ((has_ghost_mismatch and noise_divergence >= 35.0) or
-                 (ghost_discrepancy >= 1.30 and noise_divergence >= 65.0 and ela_score >= 40.0 and (rw >= 45 and rh >= 45)))
+                (
+                    (has_ghost_mismatch and noise_divergence >= 35.0) or
+                    (ghost_discrepancy >= 1.20 and noise_divergence >= 80.0 and ela_score >= 45.0 and chrom_diff >= 18.0 and (rw >= 45 and rh >= 45))
+                )
                 and has_isolated_cluster
             )
-            pillar_seam = (is_feathered and has_isolated_cluster)
+            
+            # Spectral diffusion lattice harmonics
             pillar_spectral = (harmonic_ratio >= 2.6 and fft_energy >= 82.0 and has_isolated_cluster)
+            
+            # Sensor noise void (AI generated flat pixel patches)
             pillar_sensor_void = (sensor_noise_std < 1.15 and noise_divergence >= 30.0 and ela_score >= 26.0 and has_isolated_cluster)
 
             is_generative_ai = (
@@ -531,7 +554,7 @@ class ForensicAgent:
 
         noise_contrib = max(0.0, (noise_divergence - 70.0) * 0.35) if (has_isolated_cluster and has_corroboration) else 0.0
         ghost_contrib = max(0.0, (ghost_discrepancy - 0.8) * 6.0) if (has_isolated_cluster and has_corroboration) else 0.0
-        seam_contrib = 25.0 if (is_feathered and has_isolated_cluster) else 0.0
+        seam_contrib = 25.0 if (has_corroboration and is_feathered and has_isolated_cluster) else 0.0
         software_contrib = 35.0 if provenance.get("is_edited_software_flag") else 0.0
         
         # Sensitivity modifier
