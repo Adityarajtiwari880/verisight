@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
-      contents: read
+      contents: write
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -42,6 +42,15 @@ jobs:
 
       - name: Publish Package to PyPI (Trusted Publishing)
         uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: VeriSight ${{ github.ref_name }} — 100% Empirical Forensic Benchmark Milestone
+          body_path: CHANGELOG.md
+          files: |
+            dist/*
 
   publish-mcp-registry:
     name: Publish to Official MCP Registry
