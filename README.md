@@ -3,6 +3,7 @@
 [![VeriSight CI](https://github.com/Adityarajtiwari880/verisight/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Adityarajtiwari880/verisight/actions/workflows/ci.yml)
 [![PyPI version](https://img.shields.io/badge/pypi-v2.2.6-blue.svg)](https://pypi.org/project/verisight/)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Adityarajtiwari880/verisight/blob/main/benchmarks/verisight_forensic_benchmark.ipynb)
+[![Glama Score](https://glama.ai/mcp/servers/Adityarajtiwari880/verisight/badges/card.svg)](https://glama.ai/mcp/servers/Adityarajtiwari880/verisight)
 [![mcprush score](https://mcprush.com/badge/verisight-mcp/score.svg)](https://mcprush.com/to/verisight-mcp?ref=badge)
 [![M8ven Score](https://m8ven.ai/badge/mcp/adityarajtiwari880-verisight-11ohzr?v=5ddb567da1a0cb2e2f12567300d7ff24)](https://m8ven.ai/mcp/adityarajtiwari880-verisight-11ohzr?s=readme)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
@@ -15,6 +16,7 @@
 
 <p align="center">
   <a href="https://mcprush.com/to/verisight-mcp?ref=badge"><img width="380" height="200" src="https://mcprush.com/badge/verisight-mcp/card.svg" alt="VeriSight MCP server" /></a>
+  <a href="https://glama.ai/mcp/servers/Adityarajtiwari880/verisight"><img width="380" height="200" src="https://glama.ai/mcp/servers/Adityarajtiwari880/verisight/badges/card.svg" alt="VeriSight MCP server on Glama" /></a>
 </p>
 
 > **Sub-3ms Physical AI and multi-spectral visual forensics engine built on pure OpenCV 5 and SIMD acceleration.** Detects generative AI inpainting, deepfake manipulation, duplicate photo reuse, and presentation recapture attacks with zero heavyweight neural network dependencies.
