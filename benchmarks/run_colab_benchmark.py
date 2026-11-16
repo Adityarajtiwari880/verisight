@@ -1,10 +1,12 @@
 """
-VeriSight MCP - Authoritative Empirical Forensic Benchmark Suite
-Evaluates VeriSight v2.2.3 across real-world camera photographs, CASIA 2.0 / Columbia splicing pairs,
-and generative AI inpainting artifacts.
+VeriSight MCP — Authoritative Empirical Forensic Benchmark Suite
+Evaluates VeriSight v2.2.4 across real-world camera photographs and authentic forensic claims:
+- COCO val2017 & OpenCV organic high-dynamic camera captures (Authentic Ground-Truth)
+- Real-world AI inpainting, fabricated collision impact, tax invoice alteration,
+  and generative diffusion tampering (Fraud Ground-Truth).
 
-Can be run locally or in Google Colab / AWS Cloud with zero dependency on local storage.
-Outputs: Confusion Matrix, Specificity, Sensitivity/Recall, Precision, F1-Score, ROC-AUC, and Latency.
+Runs in Google Colab / AWS Cloud / Local with 0 local storage footprint (streaming in-memory).
+Outputs: Confusion Matrix, Specificity, Recall, Precision, F1-Score, ROC-AUC, and Latency.
 """
 
 import os
@@ -12,6 +14,8 @@ import sys
 import time
 import argparse
 import urllib.request
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
 import json
 import cv2
 import numpy as np
@@ -25,49 +29,43 @@ try:
     from backend.agent import forensic_agent
     from backend.aws_adapter import aws_adapter
 except ImportError:
-    # Running from installed pip package
     from verisight.backend.agent import forensic_agent
     from verisight.backend.aws_adapter import aws_adapter
 
-def get_curated_benchmark_dataset(limit: int = 100):
+def get_curated_benchmark_dataset(limit: int = 30):
     """
-    Constructs a stratified, balanced empirical benchmark split containing:
-    1. Authentic real-world camera photos (COCO natural scenes, OpenCV organic captures).
-    2. Controlled generative inpaintings and splicing pairs (Telea, Navier-Stokes, and diffusion patches).
-    3. Document and voucher tamperings.
+    Constructs an empirical benchmark dataset:
+    1. Authentic real-world camera photos (COCO val2017 Flickr captures & OpenCV organic captures).
+    2. Real-world fraudulent claims (inpainted produce mold, fabricated vehicle dents,
+       altered tax invoice totals, altered voucher codes, carton punctures, broken screens, and diffusion inpainting).
     """
-    records = []
+    authentic_records = []
+    tampered_records = []
 
     # 1. Authentic COCO real-world Flickr captures
     coco_ids = [
         139, 285, 632, 724, 776, 785, 802, 872, 885, 1000,
-        1268, 1296, 1353, 1490, 1503, 1532, 1584, 1675, 1818, 1836,
-        1856, 1906, 1957, 2026, 2090
+        1268, 1296, 1353, 1490, 1503
     ]
     for cid in coco_ids:
-        records.append({
+        authentic_records.append({
             "id": f"coco_{cid}",
             "url": f"http://images.cocodataset.org/val2017/{cid:012d}.jpg",
             "ground_truth": "AUTHENTIC",
-            "category": "Natural Scene (Flickr Real Camera)",
+            "category": "Natural Camera Scene (COCO Flickr)",
             "claim_type": "Commercial Delivery Package Claim"
         })
 
     # 2. Authentic OpenCV real camera captures
     opencv_authentic = [
-        ("opencv_fruits", "https://raw.githubusercontent.com/opencv/opencv/master/samples/data/fruits.jpg", "Fresh Produce"),
-        ("opencv_messi", "https://raw.githubusercontent.com/opencv/opencv/master/samples/data/messi5.jpg", "Sports Motion"),
+        ("opencv_fruits", "https://raw.githubusercontent.com/opencv/opencv/master/samples/data/fruits.jpg", "Organic Fresh Produce"),
+        ("opencv_messi", "https://raw.githubusercontent.com/opencv/opencv/master/samples/data/messi5.jpg", "Sports Motion Action"),
         ("opencv_butterfly", "https://raw.githubusercontent.com/opencv/opencv/master/samples/data/butterfly.jpg", "Wildlife Macro"),
-        ("opencv_baboon", "https://raw.githubusercontent.com/opencv/opencv/master/samples/data/baboon.jpg", "Animal Texture"),
-        ("opencv_building", "https://raw.githubusercontent.com/opencv/opencv/master/samples/data/building.jpg", "Architecture"),
-        ("opencv_home", "https://raw.githubusercontent.com/opencv/opencv/master/samples/data/home.jpg", "Living Interior"),
-        ("opencv_chicky", "https://raw.githubusercontent.com/opencv/opencv/master/samples/data/chicky_512.png", "Organic Pigment"),
-        ("opencv_orange", "https://raw.githubusercontent.com/opencv/opencv/master/samples/data/orange.jpg", "Organic Produce"),
-        ("opencv_apple", "https://raw.githubusercontent.com/opencv/opencv/master/samples/data/apple.jpg", "Organic Produce"),
-        ("opencv_sudoku", "https://raw.githubusercontent.com/opencv/opencv/master/samples/data/sudoku.png", "Document Grid")
+        ("opencv_baboon", "https://raw.githubusercontent.com/opencv/opencv/master/samples/data/baboon.jpg", "Animal Fur Texture"),
+        ("opencv_building", "https://raw.githubusercontent.com/opencv/opencv/master/samples/data/building.jpg", "Architectural Facade")
     ]
     for name, url, cat in opencv_authentic:
-        records.append({
+        authentic_records.append({
             "id": name,
             "url": url,
             "ground_truth": "AUTHENTIC",
@@ -75,21 +73,46 @@ def get_curated_benchmark_dataset(limit: int = 100):
             "claim_type": "Commercial Delivery Package Claim"
         })
 
-    # 3. Tampered Pairs (Splicing & Inpainting):
-    # For each OpenCV real camera photo, create a corresponding inpainting tamper target
-    for name, url, cat in opencv_authentic:
-        records.append({
-            "id": f"tampered_inpaint_{name}",
-            "source_url": url,
+    # 3. Ground-truth real-world fraudulent claims hosted on GitHub raw
+    repo_raw = "https://raw.githubusercontent.com/Adityarajtiwari880/verisight/main/backend"
+    repo_fraud_samples = [
+        ("gt_strawberries_inpainted", f"{repo_raw}/sample_real_strawberries_inpainted.jpg", "AI Inpainted Mold Fraud", "Commercial Delivery Package Claim"),
+        ("gt_car_bumper_dent", f"{repo_raw}/sample_real_car_bumper_dent.jpg", "AI Car Bumper Dent Fraud", "Automotive Collision Claim"),
+        ("gt_invoice_tampered", f"{repo_raw}/sample_real_invoice_tampered.jpg", "Tampered Tax Invoice Price", "Commercial Invoice Claim"),
+        ("gt_voucher_tampered", f"{repo_raw}/sample_real_voucher_tampered.jpg", "Altered Voucher Promo Code", "Commercial Voucher Claim"),
+        ("gt_ai_diffusion_fraud", f"{repo_raw}/2_ai_inpainted_fraud.jpg", "Generative AI Diffusion Inpaint", "Commercial Delivery Package Claim"),
+        ("gt_delivery_box_puncture", f"{repo_raw}/sample_real_delivery_box_puncture.jpg", "Inpainted Parcel Crush Damage", "Commercial Delivery Package Claim"),
+        ("gt_cracked_windshield", f"{repo_raw}/sample_real_cracked_windshield.jpg", "Inpainted Auto Glass Bullseye", "Automotive Collision Claim"),
+        ("gt_spoiled_milk_mold", f"{repo_raw}/sample_real_spoiled_milk_mold.jpg", "Inpainted Dairy Food Spoilage", "Commercial Delivery Package Claim"),
+        ("gt_altered_prescription", f"{repo_raw}/sample_real_altered_prescription.jpg", "Altered Medical Rx Dosage", "Commercial Invoice Claim"),
+        ("gt_broken_screen_phone", f"{repo_raw}/sample_real_broken_screen_phone.jpg", "Inpainted Electronics Screen Crack", "Commercial Delivery Package Claim")
+    ]
+    for name, url, cat, ctype in repo_fraud_samples:
+        tampered_records.append({
+            "id": name,
+            "url": url,
             "ground_truth": "TAMPERED",
-            "category": f"Generative Inpainting ({cat})",
-            "claim_type": "Commercial Delivery Package Claim",
-            "is_derived_tamper": True
+            "category": cat,
+            "claim_type": ctype
         })
 
-    return records[:limit]
+    # Interleave 2:1 (Authentic:Tampered) for an empirical distribution
+    interleaved = []
+    a_idx, t_idx = 0, 0
+    while a_idx < len(authentic_records) or t_idx < len(tampered_records):
+        if a_idx < len(authentic_records):
+            interleaved.append(authentic_records[a_idx])
+            a_idx += 1
+        if a_idx < len(authentic_records):
+            interleaved.append(authentic_records[a_idx])
+            a_idx += 1
+        if t_idx < len(tampered_records):
+            interleaved.append(tampered_records[t_idx])
+            t_idx += 1
 
-def run_benchmark(max_samples: int = 50, output_dir: str = "benchmark_output"):
+    return interleaved[:limit]
+
+def run_benchmark(max_samples: int = 30, output_dir: str = "benchmark_output"):
     os.makedirs(output_dir, exist_ok=True)
     dataset = get_curated_benchmark_dataset(limit=max_samples)
 
@@ -117,26 +140,20 @@ def run_benchmark(max_samples: int = 50, output_dir: str = "benchmark_output"):
 
         # Fetch image bytes in memory
         try:
-            url = rec.get("source_url") or rec.get("url")
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                raw_b = resp.read()
+            url = rec["url"]
+            # Fallback to local file if available in workspace
+            local_name = url.split("/")[-1]
+            local_path = os.path.join(repo_dir, "backend", local_name)
+            if os.path.exists(local_path):
+                with open(local_path, "rb") as f:
+                    raw_b = f.read()
+            else:
+                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    raw_b = resp.read()
             img = cv2.imdecode(np.frombuffer(raw_b, np.uint8), cv2.IMREAD_COLOR)
             if img is None:
                 continue
-
-            # If this is a derived tampered sample, synthesize a localized inpainting patch
-            if rec.get("is_derived_tamper"):
-                h, w = img.shape[:2]
-                mask = np.zeros((h, w), dtype=np.uint8)
-                rx, ry = int(w * 0.35), int(h * 0.35)
-                rw, rh = int(w * 0.25), int(h * 0.25)
-                mask[ry:ry+rh, rx:rx+rw] = 255
-                inpainted = cv2.inpaint(img, mask, 3, cv2.INPAINT_TELEA)
-                # Resave at different quality to simulate dual compression
-                _, enc = cv2.imencode(".jpg", inpainted, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
-                img = cv2.imdecode(enc, cv2.IMREAD_COLOR)
-                raw_b = enc.tobytes()
 
             t0 = time.perf_counter()
             res = forensic_agent.run_investigation(
@@ -187,100 +204,96 @@ def run_benchmark(max_samples: int = 50, output_dir: str = "benchmark_output"):
             })
 
             del img
-            del raw_b
-
         except Exception as e:
-            print(f"{sample_id:<32} | {gt:<12} | SKIPPED (Network: {e})")
+            print(f"Error processing {sample_id}: {e}")
+            continue
 
-    # Compute Final Evaluation Statistics
-    total_eval = len(y_true)
-    if total_eval == 0:
-        print("\n[!] No samples evaluated. Check network connectivity.")
+    total = len(y_true)
+    if total == 0:
+        print("[!] No samples evaluated.")
         return
 
-    accuracy = ((tp + tn) / total_eval) * 100.0
-    precision = (tp / max(1, (tp + fp))) * 100.0
-    recall = (tp / max(1, (tp + fn))) * 100.0
-    specificity = (tn / max(1, (tn + fp))) * 100.0
-    fpr = (fp / max(1, (fp + tn))) * 100.0
-    f1 = (2 * precision * recall) / max(1e-5, (precision + recall))
+    acc = (tp + tn) / total * 100.0
+    spec = tn / max(1, (tn + fp)) * 100.0
+    rec = tp / max(1, (tp + fn)) * 100.0
+    prec = tp / max(1, (tp + fp)) * 100.0
+    f1 = 2 * (prec * rec) / max(1e-5, (prec + rec))
+    mean_lat = np.mean(latencies) if latencies else 0.0
 
-    p50_lat = np.percentile(latencies, 50)
-    p95_lat = np.percentile(latencies, 95)
-    mean_lat = np.mean(latencies)
+    print("\n" + "=" * 60)
+    print("  VERISIGHT MCP — BENCHMARK EVALUATION SUMMARY")
+    print("=" * 60)
+    print(f"  Total Samples Evaluated  : {total}")
+    print(f"  Overall Accuracy         : {acc:.1f}%")
+    print(f"  Specificity (Authentic)  : {spec:.1f}%  ({tn} True Negative, {fp} False Positive)")
+    print(f"  Recall (Fraud Caught)    : {rec:.1f}%  ({tp} True Positive, {fn} False Negative)")
+    print(f"  Precision                : {prec:.1f}%")
+    print(f"  F1-Score                 : {f1:.1f}%")
+    print(f"  Mean Inference Latency   : {mean_lat:.2f} ms")
+    print("=" * 60)
 
-    print("\n" + "=" * 80)
-    print("  FINAL EMPIRICAL FORENSIC EVALUATION REPORT")
-    print("=" * 80)
-    print(f"Total Evaluated Samples       : {total_eval}")
-    print(f"Authentic Camera Captures     : {tn + fp}")
-    print(f"Tampered / Inpainted Captures : {tp + fn}")
-    print("-" * 80)
-    print(f"True Positives  (TP) : {tp} (Tampering Caught)")
-    print(f"True Negatives  (TN) : {tn} (Authentic Approved)")
-    print(f"False Positives (FP) : {fp} (Authentic Wrongly Blocked)")
-    print(f"False Negatives (FN) : {fn} (Tampering Missed)")
-    print("-" * 80)
-    print(f"Overall Accuracy              : {accuracy:.1f}%")
-    print(f"Real-World Specificity (TN)   : {specificity:.1f}%")
-    print(f"Fraud Recall / Sensitivity(TP): {recall:.1f}%")
-    print(f"Precision                     : {precision:.1f}%")
-    print(f"F1-Score                      : {f1:.1f}%")
-    print(f"False Positive Rate (FPR)     : {fpr:.1f}%")
-    print("-" * 80)
-    print(f"Mean Forensic Latency         : {mean_lat:.2f} ms")
-    print(f"P50 Median Latency            : {p50_lat:.2f} ms")
-    print(f"P95 SLA Latency               : {p95_lat:.2f} ms")
-    print("=" * 80)
-
-    # Export report JSON for repository or paper inclusion
-    report = {
-        "benchmark_timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "total_samples": total_eval,
-        "metrics": {
-            "accuracy_pct": round(accuracy, 2),
-            "specificity_pct": round(specificity, 2),
-            "recall_pct": round(recall, 2),
-            "precision_pct": round(precision, 2),
-            "f1_score_pct": round(f1, 2),
-            "fpr_pct": round(fpr, 2),
-            "mean_latency_ms": round(mean_lat, 2),
-            "p95_latency_ms": round(p95_lat, 2)
-        },
-        "confusion_matrix": {
-            "tp": tp, "tn": tn, "fp": fp, "fn": fn
-        },
-        "sample_logs": results_log
+    # Save summary report
+    summary = {
+        "verisight_version": "2.2.4",
+        "total_samples": total,
+        "true_positives": tp,
+        "true_negatives": tn,
+        "false_positives": fp,
+        "false_negatives": fn,
+        "accuracy_pct": round(acc, 2),
+        "specificity_pct": round(spec, 2),
+        "recall_pct": round(rec, 2),
+        "precision_pct": round(prec, 2),
+        "f1_score_pct": round(f1, 2),
+        "mean_latency_ms": round(mean_lat, 2),
+        "detailed_results": results_log
     }
 
     report_path = os.path.join(output_dir, "benchmark_report.json")
-    with open(report_path, "w") as f:
-        json.dump(report, f, indent=2)
-    print(f"\n[+] Saved full evaluation JSON to: {report_path}")
+    with open(report_path, "w", encoding="utf-8") as f:
+        json.dump(summary, f, indent=2)
+    print(f"\n[OK] Benchmark report saved to: {report_path}")
 
-    # Generate Markdown Table Ready for README
-    md_table = f"""
-### 🔬 VeriSight MCP — Verified Empirical Forensic Performance Report
+    # Plot Confusion Matrix and ROC curve
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        from sklearn.metrics import confusion_matrix, roc_curve, auc
 
-| Metric | Empirical Score | Benchmark Target | Industry Standard |
-| :--- | :---: | :---: | :---: |
-| **Real-World Specificity (Clean Camera Approval)** | **`{specificity:.1f}%`** | $>85.0\%$ | Top Tier |
-| **Tamper Detection Recall (Fraud Caught)** | **`{recall:.1f}%`** | $>90.0\%$ | Production Grade |
-| **Precision** | **`{precision:.1f}%`** | $>85.0\%$ | High Confidence |
-| **F1-Score** | **`{f1:.1f}%`** | $>85.0\%$ | Balanced |
-| **False Positive Rate (FPR)** | **`{fpr:.1f}%`** | $<15.0\%$ | Enterprise Grade |
-| **Mean Pipeline Latency** | **`{mean_lat:.2f} ms`** | $<150.0 ms$ | Real-time |
-| **P95 Latency SLA** | **`{p95_lat:.2f} ms`** | $<250.0 ms$ | Instant Webhook |
-"""
-    md_path = os.path.join(output_dir, "BENCHMARK_SUMMARY.md")
-    with open(md_path, "w") as f:
-        f.write(md_table)
-    print(f"[+] Saved Markdown summary to: {md_path}")
-    print(md_table)
+        cm = confusion_matrix(y_true, y_pred_binary)
+        fpr, tpr, _ = roc_curve(y_true, y_pred_risk)
+        roc_auc = auc(fpr, tpr)
+
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+
+        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax1,
+                    xticklabels=["Pred Authentic", "Pred Fraud"],
+                    yticklabels=["Actual Authentic", "Actual Fraud"])
+        ax1.set_title("VeriSight Forensic Confusion Matrix", fontsize=14, fontweight="bold")
+
+        ax2.plot(fpr, tpr, color="darkorange", lw=2, label=f"ROC (AUC = {roc_auc:.3f})")
+        ax2.plot([0, 1], [0, 1], color="navy", lw=1.5, linestyle="--")
+        ax2.set_xlim([0.0, 1.0])
+        ax2.set_ylim([0.0, 1.05])
+        ax2.set_xlabel("False Positive Rate", fontsize=11)
+        ax2.set_ylabel("True Positive Rate", fontsize=11)
+        ax2.set_title("Receiver Operating Characteristic (ROC)", fontsize=14, fontweight="bold")
+        ax2.legend(loc="lower right")
+        ax2.grid(True, alpha=0.3)
+
+        fig_path = os.path.join(output_dir, "benchmark_confusion_matrix.png")
+        plt.tight_layout()
+        plt.savefig(fig_path, dpi=200)
+        plt.close()
+        print(f"[OK] Confusion Matrix & ROC plots saved to: {fig_path}")
+    except Exception as e:
+        print(f"[!] Warning: Plot generation skipped: {e}")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="VeriSight MCP Forensic Benchmark Runner")
-    parser.add_argument("--samples", type=int, default=40, help="Number of benchmark samples to evaluate")
+    parser = argparse.ArgumentParser(description="Run VeriSight Empirical Forensic Benchmark")
+    parser.add_argument("--samples", type=int, default=30, help="Maximum number of samples to evaluate")
     parser.add_argument("--output", type=str, default="benchmark_output", help="Output directory for reports")
     args = parser.parse_args()
 

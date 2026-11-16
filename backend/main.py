@@ -31,7 +31,7 @@ from mcp_server import MCP_TOOLS_MANIFEST, handle_json_rpc
 app = FastAPI(
     title="VeriSight MCP - OpenCV 5 Agentic Forensics Engine",
     description="Multi-spectral forensic vision agent powered by OpenCV 5 on AWS Graviton Arm64",
-    version="2.2.3"
+    version="2.2.4"
 )
 
 app.add_middleware(
@@ -47,7 +47,7 @@ def root_status():
     return {
         "service": "VeriSight MCP - Autonomous Physical AI Forensics Engine",
         "status": "ONLINE",
-        "version": "2.2.3",
+        "version": "2.2.4",
         "engine": "OpenCV 5.0.0 (ARM64 SIMD)",
         "docs_url": "/docs",
         "api_url": "/api",
@@ -56,7 +56,7 @@ def root_status():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "service": "verisight-backend", "version": "2.2.3"}
+    return {"status": "healthy", "service": "verisight-backend", "version": "2.2.4"}
 
 @app.get("/api")
 @app.get("/api/")
@@ -64,7 +64,7 @@ def api_index():
     return {
         "service": "VeriSight MCP REST API",
         "status": "ONLINE",
-        "version": "2.2.3",
+        "version": "2.2.4",
         "documentation": "/docs",
         "endpoints": {
             "health": "/health",

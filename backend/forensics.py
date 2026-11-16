@@ -173,6 +173,33 @@ def tool_global_ela_scan(img: np.ndarray, quality: int = 90) -> Tuple[np.ndarray
             
     # Prioritize genuine interior content anomalies over peripheral screenshot/crop frame borders
     pool = interior_candidates if interior_candidates else all_candidates
+
+    # If no candidate was isolated (e.g. background fused into full-frame blob),
+    # run a second pass with a higher selective percentile threshold to isolate the peak core
+    if not pool:
+        dyn_thresh_high = max(28, int(p95 * 0.88))
+        _, thresh_high = cv2.threshold(blurred, dyn_thresh_high, 255, cv2.THRESH_BINARY)
+        closed_high = cv2.morphologyEx(thresh_high, cv2.MORPH_CLOSE, kernel)
+        contours_high, _ = cv2.findContours(closed_high, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        for cnt in contours_high:
+            area = cv2.contourArea(cnt)
+            if area < min_area_thresh:
+                continue
+            x, y, cw, ch = cv2.boundingRect(cnt)
+            if (cw > 0.70 * w and ch > 0.70 * h) or area > 0.45 * total_frame_area:
+                continue
+            mask_cnt = np.zeros(blurred.shape, dtype=np.uint8)
+            cv2.drawContours(mask_cnt, [cnt], -1, 255, -1)
+            cnt_p95 = float(np.percentile(blurred[mask_cnt > 0], 95)) if np.any(mask_cnt > 0) else 0.0
+            score = cnt_p95 * np.log10(area + 10.0)
+            is_border = (x <= margin_x) or (y <= margin_y) or (x + cw >= w - margin_x) or (y + ch >= h - margin_y)
+            cand = (score, x, y, cw, ch)
+            all_candidates.append(cand)
+            if not is_border:
+                interior_candidates.append(cand)
+        pool = interior_candidates if interior_candidates else all_candidates
+
+    cluster_isolated = bool(pool)
     if pool:
         pool.sort(key=lambda item: item[0], reverse=True)
         score, x, y, cw, ch = pool[0]
@@ -197,7 +224,8 @@ def tool_global_ela_scan(img: np.ndarray, quality: int = 90) -> Tuple[np.ndarray
     return ela_heatmap, suspect_roi, round(anomaly_score, 2), {
         "roi": suspect_roi,
         "ela_p95_score": round(anomaly_score, 2),
-        "clusters_detected": len(contours),
+        "clusters_detected": len(pool) if pool else len(contours),
+        "has_isolated_cluster": cluster_isolated,
         "dyn_thresh_used": dyn_thresh,
         "edge_compensation_active": True,
         "latency_ms": elapsed_ms
@@ -600,7 +628,8 @@ def tool_micro_roi_seam_inspection(img: np.ndarray, roi: List[int]) -> Dict[str,
     interior_std = float(np.std(lap_mag[interior_mask > 0])) if np.sum(interior_mask) > 0 else 1.0
     
     ratio = round(seam_std / max(interior_std, 0.01), 2)
-    is_feathered = ratio > 1.85 or ratio < 0.35
+    # Generative AI inpainting feathering produces elevated Laplacian boundary variance discontinuity along the perimeter seam
+    is_feathered = ratio > 1.85
     
     # Overlay glowing border and heatmap on super-resolved crop
     colored_lap = cv2.applyColorMap(lap_mag, cv2.COLORMAP_MAGMA)

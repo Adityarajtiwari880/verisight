@@ -38,7 +38,7 @@ class ForensicAgent:
     JPEG Ghost Sweeper, and PRNU Sensor Noise.
     """
     def __init__(self):
-        self.version = "2.2.3"
+        self.version = "2.2.4"
 
     def run_investigation(
         self,
@@ -440,16 +440,18 @@ class ForensicAgent:
         # -------------------------------------------------------------
         clusters_detected = ela_meta.get("clusters_detected", 0)
         rx, ry, rw, rh = roi
-        is_full_frame = (rw > 0.65 * working_dim[0] and rh > 0.65 * working_dim[1])
-        has_isolated_cluster = not is_full_frame and (clusters_detected > 0) and (ela_score > 25.0)
+        roi_area = rw * rh
+        frame_area = working_dim[0] * working_dim[1]
+        is_full_frame = (rw > 0.70 * working_dim[0] and rh > 0.70 * working_dim[1]) or (roi_area > 0.55 * frame_area)
+        has_isolated_cluster = not is_full_frame and (clusters_detected > 0) and (ela_score > 25.0) and ela_meta.get("has_isolated_cluster", True)
 
         # Natural Camera vs Document / Synthetic Domain Differentiation:
         # In natural camera photos (damaged items, vehicles, nature, people), natural optical color transitions
         # produce high whole-frame chrominance variance that must not be confused with generative AI fringing.
         # In documents/vouchers, paper is predominantly monochrome/duotone so character editing creates high chrominance spikes.
-        is_doc_or_voucher = scene_triage.get("has_document_structure", False) or any(
-            k in claim_type.lower() for k in ["voucher", "coupon", "bill", "invoice", "receipt", "document", "text"]
-        )
+        is_doc_or_voucher = any(
+            k in claim_type.lower() for k in ["voucher", "coupon", "bill", "invoice", "receipt", "document", "tax"]
+        ) or (scene_triage.get("has_document_structure", False) and scene_triage.get("text_lines_count", 0) >= 15 and not scene_triage.get("face_detected", False))
 
         # Generative AI detection & Corroboration:
         if is_doc_or_voucher:
@@ -457,28 +459,48 @@ class ForensicAgent:
                 (cr_sobel_std >= 6.0 and ela_score >= 35.0 and has_isolated_cluster) or
                 (sensor_noise_std < 1.15 and ela_score >= 30.0) or
                 (harmonic_ratio >= 2.8 and fft_energy >= 85.0 and ela_score >= 38.0) or
-                (ghost_discrepancy >= 0.82 and noise_divergence >= 35.0 and has_isolated_cluster) or
+                (ghost_discrepancy >= 1.25 and noise_divergence >= 35.0 and has_isolated_cluster) or
                 (is_feathered and has_isolated_cluster)
             )
             has_corroboration = (
                 is_feathered or
-                (ghost_discrepancy >= 0.8) or
-                (noise_divergence >= 45.0 and ela_score >= 25.0) or
-                (ela_score >= 68.0) or
+                (ghost_discrepancy >= 1.25 and ela_score >= 30.0) or
+                (noise_divergence >= 45.0 and ela_score >= 35.0) or
                 is_generative_ai or
                 provenance.get("is_edited_software_flag", False)
             )
         else:
+            # Natural camera scenes: Corroboration strictly requires orthogonal physical concurrence.
+            # Natural camera optical edges and high-contrast scene features produce elevated ELA scores
+            # that must NEVER be flagged as tampering unless physically corroborated by independent probes.
+            has_ghost_mismatch = (
+                (abs(ghost_meta.get("optimal_roi_quality", 0) - ghost_meta.get("optimal_bg_quality", 0)) >= 4) or
+                (ghost_discrepancy >= 1.60 and chrom_diff >= 45.0)
+            )
+            pillar_ghost = (has_ghost_mismatch and ela_score >= 30.0 and has_isolated_cluster)
+            pillar_noise = (noise_divergence >= 50.0 and (has_ghost_mismatch or is_feathered or sensor_noise_std < 1.15) and has_isolated_cluster)
+            pillar_ghost_noise = (
+                ((has_ghost_mismatch and noise_divergence >= 35.0) or
+                 (ghost_discrepancy >= 1.30 and noise_divergence >= 65.0 and ela_score >= 40.0 and (rw >= 45 and rh >= 45)))
+                and has_isolated_cluster
+            )
+            pillar_seam = (is_feathered and has_isolated_cluster)
+            pillar_spectral = (harmonic_ratio >= 2.6 and fft_energy >= 82.0 and has_isolated_cluster)
+            pillar_sensor_void = (sensor_noise_std < 1.15 and noise_divergence >= 30.0 and ela_score >= 26.0 and has_isolated_cluster)
+
             is_generative_ai = (
-                (has_isolated_cluster and is_feathered and ela_score >= 35.0) or
-                (has_isolated_cluster and sensor_noise_std < 1.15 and noise_divergence >= 35.0 and ela_score >= 30.0) or
-                (harmonic_ratio >= 2.8 and fft_energy >= 85.0 and is_feathered) or
-                (has_isolated_cluster and is_feathered and (ghost_discrepancy >= 0.82 or noise_divergence >= 40.0))
+                pillar_spectral or
+                pillar_seam or
+                pillar_sensor_void or
+                (pillar_noise and (has_ghost_mismatch or is_feathered))
             )
             has_corroboration = (
-                is_feathered or
-                (ghost_discrepancy >= 0.82 and has_isolated_cluster and is_feathered) or
-                (noise_divergence >= 45.0 and ela_score >= 35.0 and has_isolated_cluster and is_feathered) or
+                pillar_seam or
+                pillar_ghost or
+                pillar_noise or
+                pillar_ghost_noise or
+                pillar_spectral or
+                pillar_sensor_void or
                 is_generative_ai or
                 provenance.get("is_edited_software_flag", False)
             )
