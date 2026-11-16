@@ -1,0 +1,11 @@
+{
+  "$schema": "https://glama.ai/mcp/schemas/server.json",
+  "maintainers": [
+    "adityarajtiwari880"
+  ],
+  "name": "verisight",
+  "description": "Sub-3ms Physical Multi-Spectral Image Forensics & Presentation Attack Detection engine powered by OpenCV 5 and Model Context Protocol (MCP).",
+  "build": {
+    "dockerfile": "Dockerfile"
+  }
+}
